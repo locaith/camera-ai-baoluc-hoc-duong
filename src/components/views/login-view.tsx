@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ArrowRight, Clock3, LoaderCircle, Lock, RefreshCw } from "lucide-react";
+import { ArrowRight, Check, Clock3, Copy, ExternalLink, LoaderCircle, Lock, RefreshCw } from "lucide-react";
 
 import { GoogleButton, disableGoogleAutoSelect } from "@/components/auth/google-button";
 import { Logo, LogoMark } from "@/components/shell/logo";
@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Notice } from "@/components/ui/feedback";
 import { Input } from "@/components/ui/form";
 import { api } from "@/lib/api";
+import { copyText, detectInAppBrowser, externalBrowserUrl, type InAppBrowser } from "@/lib/browser";
 import { useConnection, useIsClient } from "@/lib/connection";
 import { useHealth } from "@/lib/hooks";
 import type { GoogleLoginResult, SessionUser } from "@/lib/types";
@@ -90,6 +91,49 @@ function MobileBrand({ school }: { school?: string }) {
   );
 }
 
+/** Đang mở trong Zalo/Facebook...: cửa sổ Google sẽ trống -> mời mở bằng Chrome/Safari. */
+function OpenInBrowser({ info, onStay }: { info: InAppBrowser; onStay: () => void }) {
+  const [copied, setCopied] = useState(false);
+  const url = `${window.location.origin}/login`;
+  const browser = info.os === "ios" ? "Safari" : "Chrome";
+
+  return (
+    <div className="space-y-4">
+      <Notice tone="warning" icon={ExternalLink} title={`Hãy mở trang bằng ${browser}`}>
+        Trang đang mở bên trong {info.app}. Google không cho đăng nhập trong trình duyệt của ứng dụng này nên cửa sổ đăng
+        nhập sẽ bị trống.
+      </Notice>
+      {info.os !== "other" && (
+        <Button variant="primary" size="lg" className="w-full" asChild>
+          <a href={externalBrowserUrl(url, info.os)}>
+            <ExternalLink /> Mở bằng {browser}
+          </a>
+        </Button>
+      )}
+      <Button
+        variant="secondary"
+        size="lg"
+        className="w-full"
+        onClick={async () => {
+          if (await copyText(url)) {
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2500);
+          }
+        }}
+      >
+        {copied ? <Check /> : <Copy />} {copied ? "Đã chép liên kết" : "Sao chép liên kết"}
+      </Button>
+      <p className="text-center text-[13px] leading-relaxed text-ink-3">
+        Hoặc bấm <b className="text-ink-2">{info.os === "ios" ? "⋯" : "⋮"}</b> ở góc màn hình → chọn{" "}
+        <b className="text-ink-2">Mở bằng trình duyệt</b>, rồi đăng nhập bằng Google.
+      </p>
+      <button type="button" onClick={onStay} className="mx-auto block text-xs text-ink-3 underline underline-offset-2">
+        Vẫn thử đăng nhập tại đây
+      </button>
+    </div>
+  );
+}
+
 function Waiting({ user, onReset }: { user: SessionUser; onReset: () => void }) {
   const pending = user.status === "pending";
   return (
@@ -129,6 +173,8 @@ export function LoginView() {
   const [busy, setBusy] = useState(false);
   const [accessCode, setAccessCode] = useState("");
   const [failure, setFailure] = useState("");
+  const [stayInApp, setStayInApp] = useState(false);
+  const inApp = isClient ? detectInAppBrowser(navigator.userAgent) : null;
 
   const mode = health?.auth.mode;
   const clientId = health?.auth.google_client_id || process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "";
@@ -258,6 +304,8 @@ export function LoginView() {
         </details>
       </div>
     );
+  } else if (mode === "google" && inApp && !stayInApp) {
+    body = <OpenInBrowser info={inApp} onStay={() => setStayInApp(true)} />;
   } else if (mode === "google") {
     body = (
       <div className="space-y-5">

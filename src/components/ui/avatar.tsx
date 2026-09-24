@@ -1,15 +1,23 @@
 import type { SessionUser } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-export function Avatar({ user, size = 32, className }: { user: Pick<SessionUser, "name" | "picture" | "email">; size?: number; className?: string }) {
+export function Avatar({
+  user,
+  size = 32,
+  className,
+}: {
+  user: Pick<SessionUser, "name" | "picture" | "email">;
+  size?: number;
+  className?: string;
+}) {
   const initial = (user.name || user.email || "?").trim().slice(0, 1).toUpperCase();
   return (
     <span
       className={cn(
-        "grid shrink-0 place-items-center overflow-hidden rounded-full border border-line-strong bg-panel-3 font-display font-semibold text-dim",
+        "grid shrink-0 place-items-center overflow-hidden rounded-full bg-[#ece7dc] font-serif text-[#6b5a3a] ring-1 ring-hairline",
         className,
       )}
-      style={{ width: size, height: size, fontSize: size * 0.42 }}
+      style={{ width: size, height: size, fontSize: size * 0.44 }}
     >
       {user.picture ? (
         // Ảnh Google có thể chặn khi gửi Referer

@@ -3,13 +3,15 @@ import type { HTMLAttributes } from "react";
 import { cn } from "@/lib/utils";
 
 const TONES = {
-  neutral: "border-line-strong bg-panel-2 text-dim",
-  signal: "border-signal/35 bg-signal/10 text-signal",
-  good: "border-good/35 bg-good/10 text-good",
-  critical: "border-critical/40 bg-critical/12 text-critical",
-  warning: "border-warning/40 bg-warning/10 text-warning",
-  info: "border-info/35 bg-info/10 text-info",
-  solid: "border-transparent bg-text text-bg",
+  neutral: "bg-surface-3 text-ink-2",
+  brand: "bg-brand-soft text-brand",
+  success: "bg-success-soft text-success",
+  warning: "bg-warning-soft text-warning",
+  critical: "bg-critical-soft text-critical",
+  info: "bg-info-soft text-info",
+  gold: "bg-[#f5eee1] text-[#7a5f2c]",
+  outline: "border border-hairline-2 text-ink-2",
+  dark: "bg-ink text-white",
 } as const;
 
 export type BadgeTone = keyof typeof TONES;
@@ -25,7 +27,7 @@ export function Badge({
   return (
     <span
       className={cn(
-        "inline-flex h-[22px] items-center gap-1.5 rounded border px-2 font-mono text-[11px] font-medium tracking-wide whitespace-nowrap uppercase",
+        "inline-flex h-6 items-center gap-1.5 rounded-full px-2.5 text-[12px] leading-none font-medium whitespace-nowrap [&_svg]:size-3.5 [&_svg]:shrink-0",
         TONES[tone],
         className,
       )}
@@ -33,7 +35,7 @@ export function Badge({
     >
       {dot && (
         <span
-          className={cn("size-1.5 rounded-full bg-current", pulse && "animate-pulse-soft")}
+          className={cn("size-1.5 shrink-0 rounded-full bg-current", pulse && "animate-breathe")}
           aria-hidden
         />
       )}

@@ -1,39 +1,43 @@
 "use client";
 
-import { forwardRef, useId, type InputHTMLAttributes, type SelectHTMLAttributes } from "react";
+import {
+  forwardRef,
+  useId,
+  type InputHTMLAttributes,
+  type SelectHTMLAttributes,
+  type TextareaHTMLAttributes,
+} from "react";
 import { Slider as SliderPrimitive } from "radix-ui";
+import { ChevronDown } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
+const FIELD =
+  "w-full rounded-xl border border-hairline-2 bg-surface text-[15px] text-ink placeholder:text-ink-3 transition-[border-color,box-shadow] outline-none focus:border-brand focus:ring-4 focus:ring-brand/10 disabled:opacity-50";
+
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(
   function Input({ className, ...props }, ref) {
-    return (
-      <input
-        ref={ref}
-        className={cn(
-          "h-9 w-full rounded-md border border-line bg-bg/60 px-3 text-sm text-text placeholder:text-mute",
-          "transition-colors outline-none focus:border-signal/60 focus:ring-2 focus:ring-signal/15",
-          "disabled:opacity-50",
-          className,
-        )}
-        {...props}
-      />
-    );
+    return <input ref={ref} className={cn(FIELD, "h-11 px-3.5", className)} {...props} />;
+  },
+);
+
+export const Textarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<HTMLTextAreaElement>>(
+  function Textarea({ className, ...props }, ref) {
+    return <textarea ref={ref} className={cn(FIELD, "min-h-24 px-3.5 py-3 leading-relaxed", className)} {...props} />;
   },
 );
 
 export function Select({ className, children, ...props }: SelectHTMLAttributes<HTMLSelectElement>) {
   return (
-    <select
-      className={cn(
-        "h-9 rounded-md border border-line bg-bg/60 px-2.5 text-sm text-text outline-none",
-        "focus:border-signal/60 focus:ring-2 focus:ring-signal/15",
-        className,
-      )}
-      {...props}
-    >
-      {children}
-    </select>
+    <div className={cn("relative", className)}>
+      <select
+        className={cn(FIELD, "h-11 appearance-none pr-10 pl-3.5 text-sm")}
+        {...props}
+      >
+        {children}
+      </select>
+      <ChevronDown className="pointer-events-none absolute top-1/2 right-3.5 size-4 -translate-y-1/2 text-ink-3" />
+    </div>
   );
 }
 
@@ -49,10 +53,10 @@ export function Field({
   className?: string;
 }) {
   return (
-    <label className={cn("block space-y-1.5", className)}>
-      <span className="text-[13px] font-medium text-dim">{label}</span>
+    <label className={cn("block space-y-2", className)}>
+      <span className="block text-[13px] font-medium text-ink">{label}</span>
       {children}
-      {hint && <span className="block text-xs text-mute">{hint}</span>}
+      {hint && <span className="block text-xs leading-relaxed text-ink-3">{hint}</span>}
     </label>
   );
 }
@@ -79,14 +83,14 @@ export function RangeField({
 }) {
   const id = useId();
   return (
-    <div className="space-y-2.5">
+    <div className="space-y-3">
       <div className="flex items-baseline justify-between gap-4">
-        <label htmlFor={id} className="text-[13px] font-medium text-dim">
+        <label htmlFor={id} className="text-[13px] font-medium text-ink">
           {label}
         </label>
-        <span className="shrink-0 font-mono text-sm whitespace-nowrap text-text tabular">
+        <span className="numeral shrink-0 text-lg whitespace-nowrap text-ink">
           {Number.isInteger(step) ? value : value.toFixed(1)}
-          {unit}
+          <span className="ml-0.5 font-sans text-xs text-ink-3">{unit}</span>
         </span>
       </div>
       <SliderPrimitive.Root
@@ -96,22 +100,22 @@ export function RangeField({
         max={max}
         step={step}
         onValueChange={([v]) => onChange(v)}
-        className="relative flex h-4 w-full touch-none items-center select-none"
+        className="relative flex h-5 w-full touch-none items-center select-none"
       >
-        <SliderPrimitive.Track className="relative h-1 grow overflow-hidden rounded-full bg-panel-3">
-          <SliderPrimitive.Range className="absolute h-full bg-signal" />
+        <SliderPrimitive.Track className="relative h-1 grow overflow-hidden rounded-full bg-surface-3">
+          <SliderPrimitive.Range className="absolute h-full bg-ink" />
         </SliderPrimitive.Track>
         <SliderPrimitive.Thumb
           aria-label={label}
-          className="block size-4 rounded-full border-2 border-signal bg-bg shadow transition-transform hover:scale-110"
+          className="block size-5 rounded-full border border-hairline-2 bg-surface shadow-[0_2px_6px_rgb(22_24_29/0.18)] transition-transform hover:scale-110 focus-visible:ring-4 focus-visible:ring-brand/15 focus-visible:outline-none"
         />
       </SliderPrimitive.Root>
-      {hint && <p className="text-xs text-mute">{hint}</p>}
+      {hint && <p className="text-xs leading-relaxed text-ink-3">{hint}</p>}
     </div>
   );
 }
 
-/** Nhóm nút chọn 1 (layout lưới, khoảng thời gian...) */
+/** Nhóm nút chọn 1 (bố cục lưới, khoảng thời gian...) */
 export function Segmented<T extends string | number>({
   value,
   options,
@@ -128,7 +132,7 @@ export function Segmented<T extends string | number>({
   return (
     <div
       role="radiogroup"
-      className={cn("inline-flex rounded-md border border-line bg-bg/50 p-0.5", className)}
+      className={cn("inline-flex rounded-full border border-hairline bg-surface-3/70 p-1", className)}
     >
       {options.map((option) => {
         const active = option.value === value;
@@ -138,12 +142,15 @@ export function Segmented<T extends string | number>({
             type="button"
             role="radio"
             aria-checked={active}
+            aria-label={option.title}
             title={option.title}
             onClick={() => onChange(option.value)}
             className={cn(
-              "inline-flex items-center justify-center gap-1.5 rounded font-medium transition-colors [&_svg]:size-4",
-              size === "sm" ? "h-7 px-2.5 text-xs" : "h-8 px-3 text-[13px]",
-              active ? "bg-panel-3 text-text shadow-sm" : "text-mute hover:text-dim",
+              "inline-flex items-center justify-center gap-1.5 rounded-full font-medium whitespace-nowrap transition-all [&_svg]:size-4",
+              size === "sm" ? "h-7 px-3 text-xs" : "h-8 px-3.5 text-[13px]",
+              active
+                ? "bg-surface text-ink shadow-[0_1px_3px_rgb(22_24_29/0.12)]"
+                : "text-ink-3 hover:text-ink",
             )}
           >
             {option.label}

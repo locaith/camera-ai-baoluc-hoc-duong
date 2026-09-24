@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Be_Vietnam_Pro, Chakra_Petch, JetBrains_Mono } from "next/font/google";
+import { Be_Vietnam_Pro, Newsreader } from "next/font/google";
 
 import { Providers } from "@/components/shell/providers";
 
@@ -8,20 +8,15 @@ import "./globals.css";
 const body = Be_Vietnam_Pro({
   variable: "--font-body",
   subsets: ["latin", "vietnamese"],
-  weight: ["400", "500", "600", "700"],
+  weight: ["300", "400", "500", "600", "700"],
   display: "swap",
 });
 
-const chakra = Chakra_Petch({
-  variable: "--font-chakra",
+const display = Newsreader({
+  variable: "--font-display",
   subsets: ["latin", "vietnamese"],
-  weight: ["500", "600", "700"],
-  display: "swap",
-});
-
-const mono = JetBrains_Mono({
-  variable: "--font-jetbrains",
-  subsets: ["latin", "vietnamese"],
+  axes: ["opsz"],
+  style: ["normal", "italic"],
   display: "swap",
 });
 
@@ -31,19 +26,24 @@ export const metadata: Metadata = {
     template: "%s · Camera AI",
   },
   description:
-    "Nền tảng camera AI phòng chống bạo lực học đường: xem trực tiếp, phát hiện dấu hiệu bắt nạt, cảnh báo realtime, kho video AI và lưu trữ Cloudflare R2.",
+    "Camera AI giúp nhà trường phát hiện sớm dấu hiệu bạo lực học đường: giám sát trực tiếp, cảnh báo tức thời, lưu bằng chứng và quay tại chỗ bằng điện thoại.",
   applicationName: "Camera AI",
+  appleWebApp: { capable: true, title: "Camera AI", statusBarStyle: "default" },
+  formatDetection: { telephone: false },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0a0c0f",
-  colorScheme: "dark",
+  themeColor: "#f6f4ef",
+  colorScheme: "light",
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="vi" className={`${body.variable} ${chakra.variable} ${mono.variable}`}>
-      <body className="min-h-screen antialiased">
+    <html lang="vi" className={`${body.variable} ${display.variable}`}>
+      <body className="min-h-dvh">
         <Providers>{children}</Providers>
       </body>
     </html>

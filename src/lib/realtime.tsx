@@ -8,6 +8,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { useRouter } from "next/navigation";
 import { mutate } from "swr";
 import { toast } from "sonner";
 
@@ -30,7 +31,7 @@ export function useRealtime() {
   return useContext(RealtimeContext);
 }
 
-export const SOUND_KEY = "bds-alert-sound";
+export const SOUND_KEY = "camera-ai-alert-sound";
 
 export function soundEnabled() {
   try {
@@ -40,34 +41,39 @@ export function soundEnabled() {
   }
 }
 
-/** Tiếng "bíp" 2 nhịp cho cảnh báo nghiêm trọng (Web Audio, không cần file âm thanh). */
+/** Tiếng chuông 2 nốt nhẹ cho sự việc nghiêm trọng (Web Audio, không cần file âm thanh). */
 export function playAlarm() {
   try {
     const ctx = new AudioContext();
     const now = ctx.currentTime;
-    [0, 0.22].forEach((offset) => {
+    [
+      { at: 0, freq: 880 },
+      { at: 0.28, freq: 660 },
+    ].forEach(({ at, freq }) => {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
-      osc.type = "square";
-      osc.frequency.value = 880;
-      gain.gain.setValueAtTime(0.0001, now + offset);
-      gain.gain.exponentialRampToValueAtTime(0.08, now + offset + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + offset + 0.18);
+      osc.type = "sine";
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.0001, now + at);
+      gain.gain.exponentialRampToValueAtTime(0.18, now + at + 0.03);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + at + 0.5);
       osc.connect(gain).connect(ctx.destination);
-      osc.start(now + offset);
-      osc.stop(now + offset + 0.2);
+      osc.start(now + at);
+      osc.stop(now + at + 0.55);
     });
-    setTimeout(() => ctx.close(), 800);
+    setTimeout(() => ctx.close(), 1200);
   } catch {
     /* trình duyệt chặn âm thanh khi chưa có thao tác người dùng */
   }
 }
 
 export function RealtimeProvider({ children }: { children: ReactNode }) {
+  const router = useRouter();
   const baseUrl = useConnection((s) => s.baseUrl);
   const token = useConnection((s) => s.token);
   // Chỉ mở kênh realtime sau khi đăng nhập
   const signedIn = useConnection((s) => Boolean(s.user));
+  const isAdmin = useConnection((s) => s.user?.role === "admin");
   const key = `${baseUrl}|${token}`;
   const [conn, setConn] = useState<{ key: string; status: Status }>({
     key: "",
@@ -118,7 +124,11 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
             const notify = event.severity === "critical" ? toast.error : toast.warning;
             notify(event.title, {
               description: `${event.camera_name || "Camera"} · ${EVENT_LABELS[event.type]}`,
-              duration: event.severity === "critical" ? 10000 : 6000,
+              duration: event.severity === "critical" ? 12000 : 7000,
+              action: {
+                label: "Xem",
+                onClick: () => router.push(`/incidents?focus=${event.id}`),
+              },
             });
             if (event.severity === "critical" && soundEnabled()) playAlarm();
           }
@@ -153,6 +163,18 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
         case "settings.updated":
           refresh("/api/settings", 100);
           break;
+        case "discovery.updated": {
+          const data = payload.data as { new: number; total: number };
+          refresh("/api/cameras/discovered", 200);
+          if (isAdmin && data.new > 0) {
+            toast.info(`Tìm thấy ${data.new} camera trong mạng của trường`, {
+              description: "Có thể kết nối ngay để AI bắt đầu giám sát.",
+              duration: 10000,
+              action: { label: "Xem", onClick: () => router.push("/cameras") },
+            });
+          }
+          break;
+        }
       }
     };
 
@@ -161,7 +183,7 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
       pending.forEach(clearTimeout);
       pending.clear();
     };
-  }, [baseUrl, key, signedIn]);
+  }, [baseUrl, key, signedIn, isAdmin, router]);
 
   return (
     <RealtimeContext.Provider value={{ status, recent }}>{children}</RealtimeContext.Provider>

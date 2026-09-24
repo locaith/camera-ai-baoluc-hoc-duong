@@ -1,95 +1,113 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
+  ArrowRight,
   ArrowUpRight,
-  BrainCircuit,
+  CalendarDays,
   Cctv,
-  Film,
-  HardDrive,
+  CircleCheck,
+  Clapperboard,
+  Inbox,
+  MonitorPlay,
   Plus,
-  Siren,
-  TriangleAlert,
+  RadioTower,
+  ScanFace,
 } from "lucide-react";
 
 import { CameraTile } from "@/components/camera/camera-tile";
 import { EventsChart } from "@/components/charts/events-chart";
 import { EventRow } from "@/components/events/event-bits";
 import { Button } from "@/components/ui/button";
+import { Card, CardHeader, Kpi, PageHeader } from "@/components/ui/card";
 import { Empty, Meter, Skeleton, severityTone } from "@/components/ui/feedback";
-import { Segmented } from "@/components/ui/form";
-import { SectionTitle, StatTile } from "@/components/ui/stat-tile";
-import { useRole } from "@/lib/connection";
-import { formatBytes, formatUptime } from "@/lib/format";
-import { useCameras, useStats, useSystem } from "@/lib/hooks";
-import { classLabel } from "@/lib/labels";
-import { useRealtime } from "@/lib/realtime";
-import type { AppEvent } from "@/lib/types";
+import { useConnection, useRole } from "@/lib/connection";
+import { formatBytes, formatLongDate, formatUptime, greeting } from "@/lib/format";
+import { useCameras, useDiscovered, useEvents, useStats, useSystem } from "@/lib/hooks";
+import { INCIDENT_TYPES } from "@/lib/labels";
 import { cn } from "@/lib/utils";
 
-const RANGES = [
-  { value: 24, label: "24 giờ" },
-  { value: 168, label: "7 ngày" },
-  { value: 720, label: "30 ngày" },
-];
-
-function StatusLine({ label, value, ok }: { label: string; value: React.ReactNode; ok?: boolean }) {
+function SystemCard() {
+  const { data: system } = useSystem();
+  const { data: stats } = useStats(24);
+  const { data: discovered } = useDiscovered(true);
+  if (!system || !stats) return <Skeleton className="h-64" />;
+  const storage = stats.storage.local;
+  const rows = [
+    {
+      label: "AI phân tích hình ảnh",
+      ok: system.engine.running,
+      value: system.engine.running ? "Đang chạy" : "Đang dừng",
+    },
+    {
+      label: "Hàng đợi video",
+      ok: system.processor.queued === 0,
+      value: system.processor.queued ? `${system.processor.queued} video chờ` : "Trống",
+    },
+    { label: "Hoạt động liên tục", ok: true, value: formatUptime(system.uptime) },
+  ];
   return (
-    <div className="flex items-center justify-between gap-3 py-2 text-[13px]">
-      <span className="text-dim">{label}</span>
-      <span className="flex items-center gap-2 font-mono text-xs text-text">
-        {ok !== undefined && (
-          <span className={cn("size-1.5 rounded-full", ok ? "bg-good" : "bg-mute")} aria-hidden />
-        )}
-        {value}
-      </span>
-    </div>
+    <Card>
+      <CardHeader eyebrow="Quản trị" title="Hệ thống" />
+      <ul className="hairline-divide mt-4">
+        {rows.map((row) => (
+          <li key={row.label} className="flex items-center justify-between gap-3 py-3 text-sm">
+            <span className="text-ink-2">{row.label}</span>
+            <span className="flex items-center gap-2 text-ink">
+              <span className={cn("size-1.5 rounded-full", row.ok ? "bg-success" : "bg-warning")} />
+              {row.value}
+            </span>
+          </li>
+        ))}
+      </ul>
+      <div className="mt-2 border-t border-hairline pt-4">
+        <div className="flex justify-between text-[13px]">
+          <span className="text-ink-2">Bộ nhớ video trên máy chủ</span>
+          <span className="text-ink tabular">
+            {formatBytes(storage.bytes)} / {formatBytes(storage.limit_bytes)}
+          </span>
+        </div>
+        <Meter className="mt-2.5" value={storage.percent} tone={severityTone(storage.percent, 75, 90)} label="Bộ nhớ video" />
+      </div>
+      {discovered && discovered.new > 0 && (
+        <Link
+          href="/cameras"
+          className="mt-5 flex items-center gap-3 rounded-2xl bg-brand-soft px-4 py-3 text-[13px] text-brand transition-colors hover:bg-[#e3e8f8]"
+        >
+          <RadioTower className="size-4.5 shrink-0" strokeWidth={1.75} />
+          <span className="flex-1">
+            Tìm thấy <b>{discovered.new}</b> camera mới trong mạng của trường
+          </span>
+          <ArrowRight className="size-4" />
+        </Link>
+      )}
+    </Card>
   );
 }
 
-function SystemPanel() {
-  const { data: system } = useSystem();
-  if (!system) return <Skeleton className="h-72" />;
+function CaptureCard() {
   return (
-    <div className="panel p-4">
-      <SectionTitle eyebrow="Máy chủ" title="Trạng thái AI" />
-      <div className="mt-3 divide-y divide-line/70">
-        <StatusLine
-          label="AI engine"
-          ok={system.engine.running}
-          value={system.engine.running ? `mỗi ${system.engine.interval}s · ${system.model.last_ms}ms` : "Dừng"}
-        />
-        <StatusLine label="Mô hình" value={`${system.model.architecture} · ${system.model.classes.length} lớp`} />
-        <StatusLine
-          label="Hàng đợi video"
-          ok={system.processor.queued === 0}
-          value={system.processor.current ? `đang xử lý · ${system.processor.queued} chờ` : `${system.processor.queued} chờ`}
-        />
-        <StatusLine
-          label="Nhận dạng giọng nói"
-          ok={system.speech.whisper}
-          value={system.speech.whisper ? "Whisper" : "Chưa cài"}
-        />
-        <StatusLine label="Mã hoá clip" ok={Boolean(system.recorder.encoder)} value={system.recorder.encoder ?? "—"} />
-        <StatusLine label="Hoạt động" value={formatUptime(system.uptime)} />
-      </div>
-      <div className="mt-3 grid grid-cols-2 gap-4 border-t border-line pt-4">
-        <div>
-          <div className="flex justify-between text-xs">
-            <span className="text-dim">CPU</span>
-            <span className="font-mono text-text tabular">{system.cpu.percent.toFixed(0)}%</span>
-          </div>
-          <Meter className="mt-2" value={system.cpu.percent} tone={severityTone(system.cpu.percent, 70, 90)} label="CPU" />
-        </div>
-        <div>
-          <div className="flex justify-between text-xs">
-            <span className="text-dim">RAM</span>
-            <span className="font-mono text-text tabular">{system.memory.percent.toFixed(0)}%</span>
-          </div>
-          <Meter className="mt-2" value={system.memory.percent} tone={severityTone(system.memory.percent, 75, 90)} label="RAM" />
-        </div>
+    <div className="grain relative overflow-hidden rounded-[20px] bg-[#0f1f5c] p-6 text-white shadow-lift">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0"
+        style={{ background: "radial-gradient(420px 260px at 100% 0%, rgba(64,110,255,0.55), transparent 65%)" }}
+      />
+      <div className="relative">
+        <span className="grid size-11 place-items-center rounded-full bg-white/12 ring-1 ring-white/20">
+          <ScanFace className="size-5" strokeWidth={1.75} />
+        </span>
+        <h3 className="mt-5 font-serif text-[23px] leading-snug">Điện thoại của thầy cô cũng là một camera AI</h3>
+        <p className="mt-2 text-[13.5px] leading-relaxed text-white/70">
+          Ở nơi chưa có camera? Mở Quay tại chỗ, hướng về khu vực cần quan sát — AI sẽ phân tích và báo ngay khi có dấu
+          hiệu bắt nạt.
+        </p>
+        <Button asChild className="mt-5 bg-white text-ink hover:bg-white/90">
+          <Link href="/capture">
+            Bắt đầu quay <ArrowRight />
+          </Link>
+        </Button>
       </div>
     </div>
   );
@@ -97,234 +115,206 @@ function SystemPanel() {
 
 export function DashboardView() {
   const router = useRouter();
+  const user = useConnection((s) => s.user);
   const { isAdmin } = useRole();
-  const [hours, setHours] = useState(24);
-  const { data: stats } = useStats(hours);
+  const { data: day } = useStats(24);
+  const { data: week } = useStats(168);
   const { data: cameraData } = useCameras();
-  const { recent } = useRealtime();
+  const { data: review } = useEvents(`status=new&type=${INCIDENT_TYPES.join(",")}&limit=5`);
 
   const cameras = cameraData?.cameras ?? [];
-  const byType = stats?.events.by_type ?? {};
-  const alerts = (byType.bullying ?? 0) + (byType.toxic_speech ?? 0) + (byType.high_anger ?? 0);
-  const critical = stats?.events.by_severity.critical ?? 0;
-  const rangeLabel = RANGES.find((r) => r.value === hours)?.label ?? `${hours} giờ`;
+  const fixed = cameras.filter((c) => !c.virtual);
+  const devices = cameras.filter((c) => c.virtual);
+  const online = fixed.filter((c) => c.state === "online");
+  const needs = day?.events.needs_review ?? 0;
+  const name = user?.name?.trim() || "thầy cô";
 
-  // Gộp sự kiện realtime (SSE) với danh sách từ máy chủ
-  const feed: AppEvent[] = [];
-  const seen = new Set<string>();
-  for (const event of [...recent, ...(stats?.events.recent ?? [])]) {
-    if (seen.has(event.id) || event.severity === "info") continue;
-    seen.add(event.id);
-    feed.push(event);
+  let summary = "Đang tải tình hình trong ngày…";
+  if (day && cameraData) {
+    if (needs > 0) summary = `Có ${needs} sự việc đang chờ thầy cô xem và ghi nhận.`;
+    else if (!fixed.length)
+      summary = "Chưa có camera cố định nào. Thầy cô có thể thêm camera hoặc dùng điện thoại để quay tại chỗ.";
+    else summary = `Mọi thứ đang yên bình — ${online.length}/${fixed.length} camera hoạt động, không có sự việc nào chờ xem.`;
   }
 
-  const topCameras = stats?.events.by_camera ?? [];
-  const maxCamera = Math.max(1, ...topCameras.map((c) => c.n));
-
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-dim">
-          Tình hình an toàn trong <span className="text-text">{rangeLabel.toLowerCase()}</span> qua
-          {cameras.some((c) => c.analysis?.bullying) && (
-            <span className="ml-2 inline-flex items-center gap-1 text-critical">
-              <TriangleAlert className="size-3.5" /> đang có camera nghi bắt nạt
-            </span>
-          )}
-        </p>
-        <Segmented value={hours} onChange={setHours} options={RANGES} />
-      </div>
+    <div className="space-y-8 lg:space-y-10">
+      <PageHeader
+        eyebrow={formatLongDate()}
+        title={
+          <>
+            {greeting()},
+            <br className="sm:hidden" /> <span className="italic">{name}</span>
+          </>
+        }
+        description={summary}
+        actions={
+          <>
+            <Button variant="secondary" asChild>
+              <Link href="/live">
+                <MonitorPlay /> Xem trực tiếp
+              </Link>
+            </Button>
+            <Button variant="primary" asChild>
+              <Link href="/capture">
+                <ScanFace /> Quay tại chỗ
+              </Link>
+            </Button>
+          </>
+        }
+      />
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
-        {!stats ? (
-          Array.from({ length: 5 }, (_, i) => <Skeleton key={i} className="h-[118px]" />)
+      <div className="grid grid-cols-2 gap-3 md:gap-4 xl:grid-cols-4">
+        {!day ? (
+          Array.from({ length: 4 }, (_, i) => <Skeleton key={i} className="h-37.5" />)
         ) : (
           <>
-            <StatTile
-              label="Camera trực tuyến"
-              icon={Cctv}
-              tone={stats.cameras.error ? "warning" : "good"}
-              value={stats.cameras.online}
-              unit={`/ ${stats.cameras.total}`}
-              note={`${stats.cameras.ai_enabled} bật AI · ${stats.cameras.recording} đang ghi`}
+            <Kpi
+              label="Cần xem"
+              icon={Inbox}
+              tone={needs ? "critical" : "default"}
+              value={needs}
+              note={
+                <Link href="/incidents" className="hover:text-ink">
+                  {needs ? "Mở danh sách sự việc →" : "Không có gì chờ xem"}
+                </Link>
+              }
             />
-            <StatTile
-              label={`Cảnh báo ${rangeLabel.toLowerCase()}`}
-              icon={Siren}
-              value={alerts}
-              note={`${critical} nghiêm trọng · ${byType.bullying ?? 0} bắt nạt`}
+            <Kpi
+              label="Hôm nay"
+              icon={CalendarDays}
+              value={day.events.today}
+              note="sự việc được phát hiện hoặc đánh dấu"
               style={{ animationDelay: "60ms" }}
             />
-            <StatTile
-              label="Chưa xử lý"
-              icon={TriangleAlert}
-              tone={stats.events.unacknowledged ? "critical" : "default"}
-              value={stats.events.unacknowledged}
+            <Kpi
+              label="Camera hoạt động"
+              icon={Cctv}
+              tone={day.cameras.error ? "warning" : "success"}
+              value={day.cameras.online}
+              unit={`/ ${day.cameras.total}`}
               note={
-                <Link href="/events?status=open" className="hover:text-text">
-                  Mở danh sách cảnh báo →
-                </Link>
+                day.cameras.devices
+                  ? `+ ${day.cameras.devices} điện thoại đang quay`
+                  : day.cameras.error
+                    ? `${day.cameras.error} camera mất tín hiệu`
+                    : "Tất cả đang ổn định"
               }
               style={{ animationDelay: "120ms" }}
             />
-            <StatTile
+            <Kpi
               label="Video đã phân tích"
-              icon={Film}
-              value={stats.videos.processed}
-              unit={`/ ${stats.videos.total}`}
-              note={`${stats.videos.flagged} có dấu hiệu · ${stats.videos.queued} chờ AI`}
+              icon={Clapperboard}
+              value={day.videos.processed}
+              unit={`/ ${day.videos.total}`}
+              note={day.videos.flagged ? `${day.videos.flagged} video có dấu hiệu` : "Chưa có video đáng lo ngại"}
               style={{ animationDelay: "180ms" }}
             />
-            <StatTile
-              label="Bộ nhớ tạm (local)"
-              icon={HardDrive}
-              tone={stats.storage.local.percent >= 90 ? "warning" : "default"}
-              value={formatBytes(stats.storage.local.bytes)}
-              note={`${stats.storage.local.percent}% ngưỡng · R2 ${formatBytes(stats.storage.r2.bytes)}`}
-              style={{ animationDelay: "240ms" }}
-              className="col-span-2 md:col-span-1"
-            >
-              <Meter
-                className="mt-3"
-                value={stats.storage.local.percent}
-                tone={severityTone(stats.storage.local.percent, 75, 90)}
-                label="Dung lượng local"
-              />
-            </StatTile>
           </>
         )}
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
-        <div className="min-w-0 space-y-5">
-          <div className="panel p-4 md:p-5">
-            <SectionTitle eyebrow={`Theo ${hours <= 72 ? "giờ" : "ngày"}`} title="Hoạt động cảnh báo" className="mb-4" />
-            {stats ? (
-              <EventsChart data={stats.events.timeline} bucket={stats.bucket} />
-            ) : (
-              <Skeleton className="h-[280px]" />
-            )}
-          </div>
+      <div className="grid gap-5 lg:gap-6 xl:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]">
+        <div className="min-w-0 space-y-5 lg:space-y-6">
+          <Card>
+            <CardHeader
+              eyebrow="Ưu tiên"
+              title="Cần xem ngay"
+              action={
+                <Button variant="ghost" size="sm" asChild>
+                  <Link href="/incidents">
+                    Tất cả <ArrowUpRight />
+                  </Link>
+                </Button>
+              }
+            />
+            <div className="mt-3 -mx-2">
+              {!review ? (
+                <div className="space-y-2 px-2">
+                  <Skeleton className="h-16" />
+                  <Skeleton className="h-16" />
+                </div>
+              ) : review.events.length ? (
+                review.events.map((event) => (
+                  <EventRow key={event.id} event={event} onClick={() => router.push(`/incidents?focus=${event.id}`)} />
+                ))
+              ) : (
+                <div className="flex items-center gap-3.5 px-2 py-6">
+                  <span className="grid size-11 place-items-center rounded-full bg-success-soft text-success">
+                    <CircleCheck className="size-5" strokeWidth={1.75} />
+                  </span>
+                  <div>
+                    <div className="text-[15px] font-medium text-ink">Không có sự việc nào chờ xem</div>
+                    <div className="text-[13px] text-ink-3">Hệ thống sẽ báo ngay khi AI phát hiện dấu hiệu bất thường.</div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </Card>
 
-          <div className="panel p-4 md:p-5">
-            <SectionTitle
-              eyebrow="WebSocket · 8 fps"
-              title="Camera trực tiếp"
-              className="mb-4"
+          <Card>
+            <CardHeader eyebrow="7 ngày qua" title="Sự việc theo ngày" />
+            <div className="mt-5">
+              {week ? <EventsChart data={week.events.timeline} bucket={week.bucket} /> : <Skeleton className="h-65" />}
+            </div>
+          </Card>
+        </div>
+
+        <div className="min-w-0 space-y-5 lg:space-y-6">
+          <Card>
+            <CardHeader
+              eyebrow="Trực tiếp"
+              title="Camera đang xem"
               action={
                 cameras.length > 0 && (
                   <Button variant="ghost" size="sm" asChild>
                     <Link href="/live">
-                      Mở màn hình giám sát <ArrowUpRight />
+                      Mở <ArrowUpRight />
                     </Link>
                   </Button>
                 )
               }
             />
-            {cameras.length ? (
-              <div className="grid gap-3 sm:grid-cols-2">
-                {cameras.slice(0, 4).map((camera) => (
-                  <CameraTile
-                    key={camera.id}
-                    camera={camera}
-                    width={480}
-                    size="sm"
-                    onSelect={() => router.push(`/cameras/${camera.id}`)}
-                  />
-                ))}
-              </div>
-            ) : cameraData ? (
-              <Empty
-                icon={Cctv}
-                title="Chưa có camera"
-                action={
-                  isAdmin && (
-                    <Button variant="primary" asChild>
-                      <Link href="/cameras?add=1">
-                        <Plus /> Thêm camera
-                      </Link>
-                    </Button>
-                  )
-                }
-              >
-                Thêm camera IP qua RTSP hoặc quét ONVIF trong mạng LAN để bắt đầu giám sát.
-              </Empty>
-            ) : (
-              <Skeleton className="h-60" />
-            )}
-          </div>
-        </div>
-
-        <div className="min-w-0 space-y-5">
-          <div className="panel p-4">
-            <SectionTitle
-              eyebrow="Realtime"
-              title="Cảnh báo mới nhất"
-              action={
-                <Link href="/events" className="text-xs text-signal hover:underline">
-                  Tất cả
-                </Link>
-              }
-            />
-            <div className="mt-3 space-y-1">
-              {feed.length ? (
-                feed.slice(0, 7).map((event) => (
-                  <EventRow
-                    key={event.id}
-                    event={event}
-                    compact
-                    onClick={() => router.push(`/events?focus=${event.id}`)}
-                  />
-                ))
+            <div className="mt-4">
+              {!cameraData ? (
+                <Skeleton className="aspect-video" />
+              ) : cameras.length ? (
+                <div className="grid gap-3">
+                  {[...devices, ...online, ...fixed.filter((c) => c.state !== "online")].slice(0, 2).map((camera) => (
+                    <CameraTile
+                      key={camera.id}
+                      camera={camera}
+                      width={640}
+                      fps={6}
+                      size="sm"
+                      onSelect={() => router.push(camera.virtual ? "/live" : `/cameras/${camera.id}`)}
+                    />
+                  ))}
+                </div>
               ) : (
-                <p className="py-8 text-center text-sm text-dim">Chưa có cảnh báo nào.</p>
+                <Empty
+                  icon={Cctv}
+                  title="Chưa có camera"
+                  className="py-8"
+                  action={
+                    isAdmin && (
+                      <Button variant="primary" size="sm" asChild>
+                        <Link href="/cameras?add=1">
+                          <Plus /> Thêm camera
+                        </Link>
+                      </Button>
+                    )
+                  }
+                >
+                  Máy chủ sẽ tự tìm camera trong mạng WiFi của trường.
+                </Empty>
               )}
             </div>
-          </div>
+          </Card>
 
-          <SystemPanel />
+          <CaptureCard />
 
-          <div className="panel p-4">
-            <SectionTitle eyebrow={rangeLabel} title="Camera nhiều cảnh báo nhất" />
-            <div className="mt-4 space-y-3">
-              {topCameras.length ? (
-                topCameras.map((camera) => (
-                  <Link
-                    key={camera.camera_id}
-                    href={`/cameras/${camera.camera_id}`}
-                    className="block rounded hover:bg-panel-2/60"
-                  >
-                    <div className="flex justify-between text-[13px]">
-                      <span className="truncate text-dim">{camera.camera_name}</span>
-                      <span className="font-mono text-text tabular">{camera.n}</span>
-                    </div>
-                    <Meter className="mt-1.5" value={(camera.n / maxCamera) * 100} tone="neutral" />
-                  </Link>
-                ))
-              ) : (
-                <p className="py-4 text-center text-sm text-dim">Không có dữ liệu.</p>
-              )}
-            </div>
-          </div>
-
-          {cameras.some((c) => c.analysis) && (
-            <div className="panel p-4">
-              <SectionTitle eyebrow="Mô hình hình ảnh" title="Nhận định hiện tại" />
-              <ul className="mt-3 space-y-2">
-                {cameras.map((camera) => (
-                  <li key={camera.id} className="flex items-center justify-between gap-3 text-[13px]">
-                    <span className="flex min-w-0 items-center gap-2">
-                      <BrainCircuit className={cn("size-3.5 shrink-0", camera.analysis?.bullying ? "text-critical" : "text-mute")} />
-                      <span className="truncate text-dim">{camera.name}</span>
-                    </span>
-                    <span className="shrink-0 font-mono text-xs text-text">
-                      {camera.analysis ? `${classLabel(camera.analysis.class)} ${camera.analysis.confidence.toFixed(0)}%` : "—"}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+          {isAdmin && <SystemCard />}
         </div>
       </div>
     </div>

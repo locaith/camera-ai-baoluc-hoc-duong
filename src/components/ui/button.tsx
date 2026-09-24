@@ -5,20 +5,23 @@ import { LoaderCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const VARIANTS = {
-  primary:
-    "bg-brand text-white hover:bg-[#3a68ff] shadow-[0_0_0_1px_rgba(91,130,255,0.45),0_8px_24px_-12px_rgba(41,87,245,0.9)]",
-  secondary: "bg-panel-2 text-text border border-line hover:border-line-strong hover:bg-panel-3",
-  ghost: "text-dim hover:text-text hover:bg-panel-2",
-  danger: "bg-critical/10 text-critical border border-critical/30 hover:bg-critical/20",
-  outline: "border border-line-strong text-text hover:border-signal/60 hover:text-signal",
+  primary: "bg-ink text-white shadow-[0_1px_2px_rgb(22_24_29/0.25)] hover:bg-[#2c2f37]",
+  brand: "bg-brand text-white shadow-[0_1px_2px_rgb(29_63_184/0.35)] hover:bg-brand-2",
+  secondary:
+    "border border-hairline-2 bg-surface text-ink shadow-[0_1px_2px_rgb(22_24_29/0.04)] hover:border-[#c8c2b4] hover:bg-surface-2",
+  ghost: "text-ink-2 hover:bg-surface-3 hover:text-ink",
+  danger: "bg-critical-soft text-critical hover:bg-[#fbe2dd]",
+  "danger-solid": "bg-critical text-white hover:bg-[#9a1e14]",
+  link: "text-brand underline-offset-4 hover:underline",
 } as const;
 
 const SIZES = {
-  sm: "h-8 px-3 text-[13px] gap-1.5",
-  md: "h-9 px-4 text-sm gap-2",
-  lg: "h-11 px-5 text-[15px] gap-2",
-  icon: "h-9 w-9",
-  "icon-sm": "h-8 w-8",
+  sm: "h-8 gap-1.5 px-3.5 text-[13px] [&_svg]:size-3.5",
+  md: "h-10 gap-2 px-4.5 text-sm [&_svg]:size-4",
+  lg: "h-12 gap-2.5 px-6 text-[15px] [&_svg]:size-4.5",
+  xl: "h-14 gap-3 px-7 text-base [&_svg]:size-5",
+  icon: "size-10 [&_svg]:size-4.5",
+  "icon-sm": "size-8 [&_svg]:size-4",
 } as const;
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -37,10 +40,11 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
     <Comp
       ref={ref}
       className={cn(
-        "inline-flex shrink-0 items-center justify-center rounded-md font-medium whitespace-nowrap transition-all",
-        "disabled:pointer-events-none disabled:opacity-45 [&_svg]:size-4 [&_svg]:shrink-0",
+        "inline-flex shrink-0 items-center justify-center rounded-full font-medium whitespace-nowrap select-none",
+        "transition-[background-color,color,border-color,box-shadow,transform] duration-200 active:scale-[0.98]",
+        "disabled:pointer-events-none disabled:opacity-40 [&_svg]:shrink-0",
         VARIANTS[variant],
-        SIZES[size],
+        variant === "link" ? "h-auto px-0" : SIZES[size],
         className,
       )}
       disabled={disabled || loading}

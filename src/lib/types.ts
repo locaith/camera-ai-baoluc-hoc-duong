@@ -69,6 +69,10 @@ export interface Camera {
   recording: RecordingStatus | null;
   error: string;
   speech: SpeechStatus;
+  /** "phone" = điện thoại/laptop đang quay bằng trang "Quay tại chỗ" */
+  source?: "rtsp" | "phone";
+  virtual?: boolean;
+  owner?: string;
 }
 
 export interface LiveStatus {
@@ -103,6 +107,9 @@ export type EventType =
 
 export type Severity = "critical" | "warning" | "info";
 
+/** Quy trình xem xét của nhà trường */
+export type ReviewStatus = "new" | "confirmed" | "false_alarm" | "resolved";
+
 export interface AppEvent {
   id: string;
   camera_id: string | null;
@@ -117,11 +124,15 @@ export interface AppEvent {
   video_id: string | null;
   acknowledged: boolean;
   acknowledged_at: number | null;
+  status: ReviewStatus;
+  note: string;
+  handled_by: string;
+  handled_at: number | null;
   created_at: number;
   video?: Video | null;
 }
 
-export type VideoSource = "upload" | "recording" | "event";
+export type VideoSource = "upload" | "recording" | "event" | "phone";
 
 export type AiStatus = "pending" | "processing" | "done" | "failed" | "recording";
 
@@ -237,6 +248,12 @@ export interface Settings {
   auto_offload: boolean;
   local_storage_max_gb: number;
   offload_after_hours: number;
+  school_name: string;
+  google_client_id: string;
+  /** Chỉ quản trị viên nhận được 3 khoá dưới */
+  admin_emails?: string;
+  allowed_domains?: string;
+  auto_approve?: boolean;
 }
 
 export type TimelineBucket = { t: number } & Record<EventType, number>;
@@ -250,10 +267,14 @@ export interface StatsOverview {
     error: number;
     ai_enabled: number;
     recording: number;
+    devices: number;
   };
   events: {
     total: number;
     unacknowledged: number;
+    needs_review: number;
+    today: number;
+    by_status: Partial<Record<ReviewStatus, number>>;
     by_type: Partial<Record<EventType, number>>;
     by_severity: Partial<Record<Severity, number>>;
     by_camera: { camera_id: string; camera_name: string; n: number }[];
@@ -320,8 +341,12 @@ export interface Health {
   status: string;
   name: string;
   version: string;
+  school_name: string;
   auth_required: boolean;
   auth: { mode: AuthMode; google_client_id: string };
+  /** Máy chủ chưa bật đăng nhập Google: chỉ dùng được ngay trên máy chủ */
+  setup_required: boolean;
+  local: boolean;
   time: number;
 }
 
@@ -332,16 +357,24 @@ export interface GoogleLoginResult {
   user: SessionUser;
 }
 
-export interface DiscoveredCamera {
-  id: number;
+/** Thiết bị camera máy chủ tự tìm thấy trong cùng mạng WiFi/LAN */
+export interface DiscoveredDevice {
   ip: string;
-  port: number;
+  onvif_port: number | null;
   xaddr: string;
-  epr: string;
-  name: string;
-  manufacturer: string;
-  model: string;
-  status: string;
+  rtsp_ports: number[];
+  kind: "onvif" | "rtsp";
+  first_seen: number;
+  last_seen: number;
+  added: boolean;
+}
+
+export interface DiscoverySnapshot {
+  scanned_at: number | null;
+  scanning: boolean;
+  networks: string[];
+  devices: DiscoveredDevice[];
+  new: number;
 }
 
 export interface RtspProbe {

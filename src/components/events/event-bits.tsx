@@ -12,9 +12,9 @@ import {
 
 import { Badge } from "@/components/ui/badge";
 import { mediaUrl } from "@/lib/api";
-import { formatRelative, formatTime } from "@/lib/format";
-import { EVENT_LABELS, SEVERITY_LABELS } from "@/lib/labels";
-import type { AppEvent, EventType, Severity } from "@/lib/types";
+import { formatWhen } from "@/lib/format";
+import { EVENT_LABELS, REVIEW_LABELS, SEVERITY_LABELS } from "@/lib/labels";
+import type { AppEvent, EventType, ReviewStatus, Severity } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 export const EVENT_ICONS: Record<EventType, LucideIcon> = {
@@ -35,16 +35,30 @@ export function SeverityBadge({ severity }: { severity: Severity }) {
   );
 }
 
-export const SEVERITY_STRIPE: Record<Severity, string> = {
-  critical: "bg-critical",
-  warning: "bg-warning",
-  info: "bg-info",
+export function ReviewBadge({ status, className }: { status: ReviewStatus; className?: string }) {
+  const tone = {
+    new: "critical",
+    confirmed: "warning",
+    false_alarm: "neutral",
+    resolved: "success",
+  } as const;
+  return (
+    <Badge tone={tone[status]} dot pulse={status === "new"} className={className}>
+      {REVIEW_LABELS[status]}
+    </Badge>
+  );
+}
+
+const ICON_TONE: Record<Severity, string> = {
+  critical: "text-critical",
+  warning: "text-warning",
+  info: "text-info",
 };
 
 export function EventThumb({ event, className }: { event: AppEvent; className?: string }) {
   const Icon = EVENT_ICONS[event.type];
   return (
-    <div className={cn("relative shrink-0 overflow-hidden rounded bg-bg", className)}>
+    <div className={cn("relative shrink-0 overflow-hidden rounded-xl bg-surface-3", className)}>
       {event.has_snapshot ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
@@ -54,16 +68,15 @@ export function EventThumb({ event, className }: { event: AppEvent; className?: 
           className="size-full object-cover"
         />
       ) : (
-        <div className="grid size-full place-items-center text-mute">
-          <Icon className="size-5" />
+        <div className="grid size-full place-items-center">
+          <Icon className={cn("size-5", ICON_TONE[event.severity])} strokeWidth={1.75} />
         </div>
       )}
-      <span className={cn("absolute inset-y-0 left-0 w-[3px]", SEVERITY_STRIPE[event.severity])} />
     </div>
   );
 }
 
-/** Dòng sự kiện gọn (feed cảnh báo, dashboard). */
+/** Dòng sự việc gọn (tổng quan, trực tiếp). */
 export function EventRow({
   event,
   onClick,
@@ -71,6 +84,7 @@ export function EventRow({
 }: {
   event: AppEvent;
   onClick?: () => void;
+  /** Cột hẹp: thay nhãn trạng thái bằng chấm đỏ khi cần xem */
   compact?: boolean;
 }) {
   const Icon = EVENT_ICONS[event.type];
@@ -78,36 +92,24 @@ export function EventRow({
     <button
       type="button"
       onClick={onClick}
-      className={cn(
-        "flex w-full items-center gap-3 rounded-md border border-transparent p-2 text-left transition-colors",
-        "hover:border-line hover:bg-panel-2/70",
-        !event.acknowledged && event.severity !== "info" && "bg-panel-2/40",
-      )}
+      className="group flex w-full items-center gap-3.5 rounded-2xl p-2 text-left transition-colors hover:bg-surface-2"
     >
-      <EventThumb event={event} className={compact ? "h-10 w-14" : "h-12 w-[72px]"} />
+      <EventThumb event={event} className={compact ? "h-12 w-16" : "h-14 w-20"} />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
-          <Icon
-            className={cn(
-              "size-3.5 shrink-0",
-              event.severity === "critical"
-                ? "text-critical"
-                : event.severity === "warning"
-                  ? "text-warning"
-                  : "text-info",
-            )}
-          />
-          <span className="truncate text-[13px] font-medium text-text">{EVENT_LABELS[event.type]}</span>
-          {event.confidence !== null && event.type !== "camera_offline" && (
-            <span className="font-mono text-[11px] text-mute tabular">{event.confidence.toFixed(0)}%</span>
+          <Icon className={cn("size-3.5 shrink-0", ICON_TONE[event.severity])} />
+          <span className="truncate text-[14px] font-medium text-ink">{EVENT_LABELS[event.type]}</span>
+          {compact && event.status === "new" && (
+            <span className="size-1.5 shrink-0 rounded-full bg-critical" aria-label="Cần xem" />
+          )}
+          {event.confidence !== null && event.type === "bullying" && (
+            <span className="text-xs text-ink-3 tabular">{event.confidence.toFixed(0)}%</span>
           )}
         </div>
-        <div className="mt-0.5 truncate text-xs text-dim">{event.camera_name || "—"}</div>
+        <div className="mt-0.5 truncate text-[13px] text-ink-2">{event.camera_name || "—"}</div>
+        <div className="mt-0.5 text-xs text-ink-3">{formatWhen(event.created_at)}</div>
       </div>
-      <div className="shrink-0 text-right">
-        <div className="font-mono text-[11px] text-dim tabular">{formatTime(event.created_at)}</div>
-        <div className="mt-0.5 text-[10px] text-mute">{formatRelative(event.created_at)}</div>
-      </div>
+      {!compact && <ReviewBadge status={event.status} className="shrink-0" />}
     </button>
   );
 }

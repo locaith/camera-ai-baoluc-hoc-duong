@@ -6,110 +6,83 @@ import { BarChart3, Table2 } from "lucide-react";
 
 import { Segmented } from "@/components/ui/form";
 import { formatDay, formatTime } from "@/lib/format";
-import { CHART_EVENT_TYPES } from "@/lib/labels";
 import type { TimelineBucket } from "@/lib/types";
 
-type SeriesKey = (typeof CHART_EVENT_TYPES)[number]["key"];
+/** Các loại tính là "sự việc" trên biểu đồ (không tính thông báo kỹ thuật). */
+const KINDS = ["bullying", "toxic_speech", "high_anger", "manual"] as const;
 
-// Thứ tự chồng từ đáy lên: "Bắt nạt" bám trục để dễ so sánh
-const STACK: SeriesKey[] = ["bullying", "toxic_speech", "high_anger"];
-const GAP = 2;
-const RADIUS = 4;
-
-function topRoundedPath(x: number, y: number, w: number, h: number, r: number) {
-  const radius = Math.max(0, Math.min(r, w / 2, h));
-  return [
-    `M${x},${y + h}`,
-    `L${x},${y + radius}`,
-    `Q${x},${y} ${x + radius},${y}`,
-    `L${x + w - radius},${y}`,
-    `Q${x + w},${y} ${x + w},${y + radius}`,
-    `L${x + w},${y + h}`,
-    "Z",
-  ].join(" ");
+interface Row {
+  t: number;
+  n: number;
 }
 
-function makeSegment(series: SeriesKey, color: string) {
-  return function Segment(props: {
-    x?: number;
-    y?: number;
-    width?: number;
-    height?: number;
-    payload?: TimelineBucket;
-  }) {
-    const { x = 0, y = 0, width = 0, height = 0, payload } = props;
-    if (!payload || !payload[series] || height <= 0) return <g />;
-    const top = [...STACK].reverse().find((key) => payload[key] > 0) === series;
-    // Khe 2px màu nền giữa các đoạn chồng (thay cho viền)
-    const h = Math.max(1, height - GAP);
-    return <path d={topRoundedPath(x, y + (height - h), width, h, top ? RADIUS : 0)} fill={color} />;
-  };
+function weekday(t: number) {
+  const day = new Date(t * 1000).getDay();
+  return day === 0 ? "CN" : `T${day + 1}`;
 }
 
-const SEGMENTS = Object.fromEntries(
-  CHART_EVENT_TYPES.map((s) => [s.key, makeSegment(s.key, s.color)]),
-) as Record<SeriesKey, ReturnType<typeof makeSegment>>;
-
-function bucketLabel(t: number, bucket: number) {
-  return bucket >= 86400 ? formatDay(t) : formatTime(t);
+function shortDate(t: number) {
+  const date = new Date(t * 1000);
+  return `${date.getDate()}/${date.getMonth() + 1}`;
 }
 
-function ChartTooltip({
-  active,
-  payload,
-  bucket,
-}: {
-  active?: boolean;
-  payload?: { payload: TimelineBucket }[];
-  bucket: number;
-}) {
+function label(t: number, bucket: number) {
+  return bucket >= 86400 ? `${weekday(t)} · ${shortDate(t)}` : formatTime(t);
+}
+
+/** Nhãn trục ngày 2 dòng: thứ + ngày/tháng. */
+function DayTick(props: { x?: number; y?: number; payload?: { value: number } }) {
+  const { x = 0, y = 0, payload } = props;
+  if (!payload) return <g />;
+  return (
+    <g transform={`translate(${x},${y + 6})`}>
+      <text textAnchor="middle" fill="var(--ink-2)" fontSize={11.5} fontWeight={500}>
+        <tspan x={0} dy="0.71em">
+          {weekday(payload.value)}
+        </tspan>
+        <tspan x={0} dy="1.35em" fill="var(--ink-3)" fontWeight={400} fontSize={11}>
+          {shortDate(payload.value)}
+        </tspan>
+      </text>
+    </g>
+  );
+}
+
+function TopRounded(props: { x?: number; y?: number; width?: number; height?: number; fill?: string }) {
+  const { x = 0, y = 0, width = 0, height = 0, fill } = props;
+  if (height <= 0) return <g />;
+  const r = Math.min(4, width / 2, height);
+  const d = `M${x},${y + height} L${x},${y + r} Q${x},${y} ${x + r},${y} L${x + width - r},${y} Q${x + width},${y} ${x + width},${y + r} L${x + width},${y + height} Z`;
+  return <path d={d} fill={fill} />;
+}
+
+function ChartTooltip({ active, payload, bucket }: { active?: boolean; payload?: { payload: Row }[]; bucket: number }) {
   if (!active || !payload?.length) return null;
   const row = payload[0].payload;
-  const total = STACK.reduce((sum, key) => sum + row[key], 0);
   return (
-    <div className="min-w-44 rounded-md border border-line-strong bg-panel-3 px-3 py-2.5 text-xs shadow-xl shadow-black/50">
-      <div className="mb-2 font-mono text-[11px] text-dim">
-        {bucket >= 86400
-          ? formatDay(row.t)
-          : `${formatTime(row.t)} – ${formatTime(row.t + bucket)} · ${formatDay(row.t)}`}
+    <div className="rounded-xl bg-ink px-3 py-2 text-xs text-white shadow-lift">
+      <div className="opacity-70">
+        {bucket >= 86400 ? label(row.t, bucket) : `${formatTime(row.t)}–${formatTime(row.t + bucket)} · ${formatDay(row.t)}`}
       </div>
-      {CHART_EVENT_TYPES.map((s) => (
-        <div key={s.key} className="flex items-center justify-between gap-4 py-0.5">
-          <span className="flex items-center gap-2 text-dim">
-            <span className="size-2.5 rounded-sm" style={{ background: s.color }} />
-            {s.label}
-          </span>
-          <span className="font-mono text-text tabular">{row[s.key]}</span>
-        </div>
-      ))}
-      <div className="mt-1.5 flex justify-between border-t border-line pt-1.5 text-dim">
-        <span>Tổng</span>
-        <span className="font-mono text-text tabular">{total}</span>
-      </div>
+      <div className="mt-0.5 text-[13px] font-medium">{row.n} sự việc</div>
     </div>
   );
 }
 
-export function EventsChart({ data, bucket }: { data: TimelineBucket[]; bucket: number }) {
+/** Số sự việc theo thời gian — 1 chuỗi dữ liệu nên không cần chú giải, tiêu đề đã gọi tên. */
+export function EventsChart({ data, bucket, height = 220 }: { data: TimelineBucket[]; bucket: number; height?: number }) {
   const [view, setView] = useState<"chart" | "table">("chart");
-  const totals = Object.fromEntries(
-    STACK.map((key) => [key, data.reduce((sum, row) => sum + (row[key] ?? 0), 0)]),
-  ) as Record<SeriesKey, number>;
-  const tickEvery = Math.max(1, Math.round(data.length / 8));
+  const rows: Row[] = data.map((b) => ({ t: b.t, n: KINDS.reduce((sum, key) => sum + (b[key] ?? 0), 0) }));
+  const total = rows.reduce((sum, row) => sum + row.n, 0);
+  const tickEvery = Math.max(1, Math.round(rows.length / 7));
 
   return (
     <div>
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        {/* Legend luôn hiện (>= 2 series): màu nằm ở ô vuông, chữ dùng màu chữ */}
-        <ul className="flex flex-wrap gap-x-5 gap-y-1.5">
-          {CHART_EVENT_TYPES.map((s) => (
-            <li key={s.key} className="flex items-center gap-2 text-[13px] text-dim">
-              <span className="size-2.5 rounded-sm" style={{ background: s.color }} />
-              {s.label}
-              <span className="font-mono text-xs text-text tabular">{totals[s.key]}</span>
-            </li>
-          ))}
-        </ul>
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <div className="flex items-baseline gap-2">
+          <span className="numeral text-[30px] leading-none text-ink">{total}</span>
+          <span className="text-[13px] text-ink-3">sự việc trong khoảng này</span>
+        </div>
         <Segmented
           size="sm"
           value={view}
@@ -124,76 +97,54 @@ export function EventsChart({ data, bucket }: { data: TimelineBucket[]; bucket: 
       {view === "chart" ? (
         <BarChart
           responsive
-          data={data}
-          margin={{ top: 4, right: 4, bottom: 0, left: -18 }}
-          style={{ width: "100%", height: 236 }}
-          barCategoryGap="22%"
+          data={rows}
+          margin={{ top: 6, right: 0, bottom: 0, left: -22 }}
+          style={{ width: "100%", height }}
+          barCategoryGap="28%"
         >
-          <CartesianGrid vertical={false} stroke="var(--line)" strokeWidth={1} />
+          <CartesianGrid vertical={false} stroke="var(--hairline)" />
           <XAxis
             dataKey="t"
-            tickFormatter={(t: number) => bucketLabel(t, bucket)}
+            tickFormatter={(t: number) => label(t, bucket)}
             interval={tickEvery - 1}
-            tick={{ fill: "var(--text-mute)", fontSize: 11, fontFamily: "var(--font-jetbrains)" }}
+            tick={bucket >= 86400 ? <DayTick /> : { fill: "var(--ink-3)", fontSize: 11 }}
             tickLine={false}
-            axisLine={{ stroke: "var(--line-strong)" }}
+            axisLine={{ stroke: "var(--hairline-2)" }}
+            tickMargin={8}
+            height={bucket >= 86400 ? 44 : 30}
           />
           <YAxis
             allowDecimals={false}
-            tick={{ fill: "var(--text-mute)", fontSize: 11, fontFamily: "var(--font-jetbrains)" }}
+            tick={{ fill: "var(--ink-3)", fontSize: 11 }}
             tickLine={false}
             axisLine={false}
             width={44}
           />
           <Tooltip
-            cursor={{ fill: "rgba(255,255,255,0.04)" }}
+            cursor={{ fill: "rgb(22 24 29 / 0.035)", radius: 8 }}
             content={<ChartTooltip bucket={bucket} />}
             isAnimationActive={false}
           />
-          {STACK.map((key) => (
-            <Bar
-              key={key}
-              dataKey={key}
-              stackId="events"
-              maxBarSize={24}
-              shape={SEGMENTS[key]}
-              isAnimationActive={false}
-            />
-          ))}
+          <Bar dataKey="n" fill="var(--brand)" maxBarSize={36} shape={TopRounded} isAnimationActive={false} />
         </BarChart>
       ) : (
-        <div className="max-h-[236px] overflow-y-auto rounded-md border border-line">
-          <table className="w-full text-left text-xs">
-            <thead className="sticky top-0 bg-panel-2 text-mute">
+        <div className="overflow-y-auto rounded-2xl border border-hairline" style={{ maxHeight: height }}>
+          <table className="w-full text-left text-[13px]">
+            <thead className="sticky top-0 bg-surface-2 text-ink-3">
               <tr>
-                <th className="px-3 py-2 font-medium">Thời gian</th>
-                {CHART_EVENT_TYPES.map((s) => (
-                  <th key={s.key} className="px-3 py-2 text-right font-medium">
-                    {s.label}
-                  </th>
-                ))}
+                <th className="px-4 py-2.5 font-medium">Thời gian</th>
+                <th className="px-4 py-2.5 text-right font-medium">Số sự việc</th>
               </tr>
             </thead>
-            <tbody className="font-mono tabular">
-              {data
-                .filter((row) => STACK.some((key) => row[key] > 0))
-                .map((row) => (
-                  <tr key={row.t} className="border-t border-line/70 text-dim">
-                    <td className="px-3 py-1.5">
-                      {bucketLabel(row.t, bucket)} {bucket < 86400 && formatDay(row.t)}
-                    </td>
-                    {STACK.map((key) => (
-                      <td key={key} className="px-3 py-1.5 text-right text-text">
-                        {row[key]}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
+            <tbody className="tabular">
+              {rows.map((row) => (
+                <tr key={row.t} className="border-t border-hairline text-ink-2">
+                  <td className="px-4 py-2">{label(row.t, bucket)}</td>
+                  <td className="px-4 py-2 text-right text-ink">{row.n}</td>
+                </tr>
+              ))}
             </tbody>
           </table>
-          {!data.some((row) => STACK.some((key) => row[key] > 0)) && (
-            <div className="p-6 text-center text-sm text-dim">Chưa có cảnh báo trong khoảng này.</div>
-          )}
         </div>
       )}
     </div>

@@ -11,7 +11,7 @@ export function StorageBadge({ storage }: { storage: StorageKind }) {
   const tone = storage === "r2" ? "info" : storage === "uploading" ? "warning" : "neutral";
   return (
     <Badge tone={tone}>
-      <Icon className={storage === "uploading" ? "size-3 animate-pulse-soft" : "size-3"} />
+      <Icon className={storage === "uploading" ? "animate-breathe" : undefined} />
       {STORAGE_LABELS[storage]}
     </Badge>
   );
@@ -20,9 +20,9 @@ export function StorageBadge({ storage }: { storage: StorageKind }) {
 export function AiStatusBadge({ status, progress }: { status: AiStatus; progress?: number }) {
   if (status === "processing") {
     return (
-      <Badge tone="signal">
-        <LoaderCircle className="size-3 animate-spin" />
-        {progress ? `${progress.toFixed(0)}%` : AI_STATUS_LABELS.processing}
+      <Badge tone="brand">
+        <LoaderCircle className="animate-spin" />
+        {progress ? `Đang phân tích ${progress.toFixed(0)}%` : AI_STATUS_LABELS.processing}
       </Badge>
     );
   }
@@ -40,14 +40,14 @@ export function AiStatusBadge({ status, progress }: { status: AiStatus; progress
 }
 
 export function SourceBadge({ source }: { source: VideoSource }) {
-  return <Badge tone="neutral">{SOURCE_LABELS[source]}</Badge>;
+  return <Badge tone={source === "phone" ? "gold" : "outline"}>{SOURCE_LABELS[source]}</Badge>;
 }
 
-/** Kết luận AI: có dấu hiệu / nghi vấn / an toàn (luôn kèm chữ, không chỉ màu). */
+/** Kết luận AI: có dấu hiệu / cần xem lại / bình thường (luôn kèm chữ, không chỉ màu). */
 export function VerdictBadge({ video }: { video: Video }) {
   const summary = video.ai_summary;
   if (video.ai_status !== "done" || !summary) return null;
-  if (summary.flagged) return <Badge tone="critical" dot>Có dấu hiệu</Badge>;
-  if (summary.segments.length) return <Badge tone="warning" dot>Cần xem lại</Badge>;
-  return <Badge tone="good" dot>An toàn</Badge>;
+  if (summary.flagged) return <Badge tone="critical" dot>Có dấu hiệu bắt nạt</Badge>;
+  if (summary.segments.length) return <Badge tone="warning" dot>Nên xem lại</Badge>;
+  return <Badge tone="success" dot>Bình thường</Badge>;
 }

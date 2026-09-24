@@ -1,78 +1,178 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import {
-  Check,
-  Lock,
-  LogOut,
-  Megaphone,
-  RotateCcw,
-  Save,
-  Trash2,
-  Unlock,
-  UserCheck,
-  Users,
-  Volume2,
-} from "lucide-react";
+import { Lock, LogOut, Megaphone, RotateCcw, Save, Trash2, Unlock, UserCheck, Volume2 } from "lucide-react";
 
-import { disableGoogleAutoSelect } from "@/components/auth/google-button";
+import { useSignOut } from "@/components/shell/sidebar";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Confirm, Skeleton } from "@/components/ui/feedback";
-import { Field, Input, RangeField, Select } from "@/components/ui/form";
-import { SectionTitle } from "@/components/ui/stat-tile";
-import { Switch } from "@/components/ui/switch";
+import { Card, CardHeader, PageHeader } from "@/components/ui/card";
+import { Confirm, Notice, Skeleton } from "@/components/ui/feedback";
+import { Field, Input, RangeField, Select, Textarea } from "@/components/ui/form";
+import { SwitchRow } from "@/components/ui/switch";
 import { api } from "@/lib/api";
 import { useConnection, useRole } from "@/lib/connection";
-import { formatBytes, formatRelative, formatUptime, hostOf } from "@/lib/format";
+import { formatRelative, formatUptime } from "@/lib/format";
 import { revalidate, useHealth, useSettings, useSystem, useUsers } from "@/lib/hooks";
-import { classLabel, ROLE_HINTS, ROLE_LABELS } from "@/lib/labels";
+import { ROLE_HINTS, ROLE_LABELS } from "@/lib/labels";
 import { playAlarm, SOUND_KEY, soundEnabled } from "@/lib/realtime";
 import type { Role, SessionUser, Settings } from "@/lib/types";
 
-function Section({ children }: { children: React.ReactNode }) {
-  return <section className="panel p-4 md:p-5">{children}</section>;
-}
-
-function AccountSection() {
-  const router = useRouter();
+function AccountCard() {
   const user = useConnection((s) => s.user);
-  const clearSession = useConnection((s) => s.clearSession);
+  const signOut = useSignOut();
   if (!user) return null;
   return (
-    <Section>
-      <SectionTitle eyebrow="Tài khoản" title="Bạn đang đăng nhập" />
-      <div className="mt-4 flex flex-wrap items-center gap-4">
-        <Avatar user={user} size={52} />
+    <Card>
+      <CardHeader eyebrow="Tài khoản" title="Thầy cô đang đăng nhập" />
+      <div className="mt-5 flex flex-wrap items-center gap-4">
+        <Avatar user={user} size={56} />
         <div className="min-w-0 flex-1">
-          <div className="text-[15px] font-semibold">{user.name}</div>
-          <div className="font-mono text-xs text-dim">{user.email || "—"}</div>
-          <div className="mt-1.5 flex items-center gap-2">
-            <Badge tone={user.role === "admin" ? "signal" : "neutral"}>{ROLE_LABELS[user.role]}</Badge>
-            <span className="text-xs text-mute">{ROLE_HINTS[user.role]}</span>
-          </div>
+          <div className="font-serif text-[21px] text-ink">{user.name}</div>
+          <div className="text-[13px] text-ink-3">{user.email || "—"}</div>
         </div>
-        <Button
-          variant="secondary"
-          onClick={() => {
-            disableGoogleAutoSelect();
-            clearSession();
-            router.replace("/login");
-          }}
-        >
+        <Button variant="secondary" onClick={signOut}>
           <LogOut /> Đăng xuất
         </Button>
       </div>
-    </Section>
+      <div className="mt-5 flex items-start gap-3 rounded-2xl bg-surface-2 px-4 py-3">
+        <Badge tone={user.role === "admin" ? "brand" : user.role === "operator" ? "gold" : "neutral"}>{ROLE_LABELS[user.role]}</Badge>
+        <span className="pt-0.5 text-[13px] leading-relaxed text-ink-2">{ROLE_HINTS[user.role]}</span>
+      </div>
+    </Card>
+  );
+}
+
+function AlertsCard() {
+  const { isOperator } = useRole();
+  const [sound, setSound] = useState(soundEnabled);
+  const [text, setText] = useState("Thông báo. Đề nghị giáo viên trực tới khu vực hành lang tầng hai.");
+  const [speaking, setSpeaking] = useState(false);
+
+  return (
+    <Card>
+      <CardHeader eyebrow="Thông báo" title="Âm thanh cảnh báo" />
+      <div className="mt-5 space-y-4">
+        <div className="flex items-center gap-2">
+          <SwitchRow
+            className="flex-1"
+            label="Chuông báo trên thiết bị này"
+            hint="Phát tiếng chuông khi có sự việc nghiêm trọng"
+            checked={sound}
+            onCheckedChange={(v) => {
+              setSound(v);
+              try {
+                localStorage.setItem(SOUND_KEY, v ? "on" : "off");
+              } catch {
+                /* ignore */
+              }
+            }}
+          />
+          <Button size="icon" variant="secondary" onClick={playAlarm} aria-label="Nghe thử chuông">
+            <Volume2 />
+          </Button>
+        </div>
+        {isOperator && (
+          <div className="space-y-2">
+            <div className="text-[13px] font-medium text-ink">Đọc thông báo qua loa của máy chủ</div>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Input value={text} onChange={(e) => setText(e.target.value)} />
+              <Button
+                variant="secondary"
+                loading={speaking}
+                onClick={async () => {
+                  setSpeaking(true);
+                  try {
+                    const res = await api<{ success: boolean; error?: string }>("/api/speech/speak", {
+                      method: "POST",
+                      json: { text },
+                    });
+                    if (res.success) toast.success("Loa đang đọc thông báo");
+                    else toast.error(res.error ?? "Chưa đọc được");
+                  } catch (e) {
+                    toast.error("Chưa đọc được", { description: (e as Error).message });
+                  } finally {
+                    setSpeaking(false);
+                  }
+                }}
+              >
+                {!speaking && <Megaphone />} Phát loa
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+function SchoolCard({ settings }: { settings: Settings }) {
+  const [school, setSchool] = useState(settings.school_name);
+  const [admins, setAdmins] = useState(settings.admin_emails ?? "");
+  const [domains, setDomains] = useState(settings.allowed_domains ?? "");
+  const [autoApprove, setAutoApprove] = useState(Boolean(settings.auto_approve));
+  const [saving, setSaving] = useState(false);
+  const { data: health } = useHealth();
+
+  async function save() {
+    setSaving(true);
+    try {
+      await api("/api/settings", {
+        method: "PUT",
+        json: { school_name: school.trim(), admin_emails: admins, allowed_domains: domains, auto_approve: autoApprove },
+      });
+      toast.success("Đã lưu thông tin nhà trường");
+      revalidate("/api/settings");
+      revalidate("/api/health");
+    } catch (e) {
+      toast.error("Chưa lưu được", { description: (e as Error).message });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader
+        eyebrow="Nhà trường"
+        title="Thông tin & đăng nhập"
+        action={
+          <Button size="sm" variant="primary" onClick={save} loading={saving}>
+            {!saving && <Save />} Lưu
+          </Button>
+        }
+      />
+      <div className="mt-5 space-y-5">
+        <Field label="Tên trường" hint="Hiện trên trang đăng nhập và menu.">
+          <Input value={school} onChange={(e) => setSchool(e.target.value)} placeholder="Trường Quốc tế Ánh Dương" maxLength={120} />
+        </Field>
+        <div className="flex items-center justify-between gap-3 rounded-2xl bg-surface-2 px-4 py-3">
+          <span className="text-[13px] text-ink-2">Đăng nhập bằng Google</span>
+          {health?.auth.mode === "google" ? <Badge tone="success" dot>Đang bật</Badge> : <Badge tone="warning" dot>Chưa bật</Badge>}
+        </div>
+        <Field label="Email quản trị viên" hint="Các email này luôn có toàn quyền. Cách nhau bằng dấu phẩy.">
+          <Textarea value={admins} onChange={(e) => setAdmins(e.target.value)} placeholder="hieutruong@truong.edu.vn" className="min-h-20" />
+        </Field>
+        <Field label="Tên miền email của trường" hint="Giáo viên dùng email thuộc các tên miền này được duyệt tự động.">
+          <Input value={domains} onChange={(e) => setDomains(e.target.value)} placeholder="truong.edu.vn" />
+        </Field>
+        <SwitchRow
+          label="Tự duyệt mọi tài khoản mới"
+          hint="Không khuyến nghị — ai có tài khoản Google cũng xem được camera (quyền Chỉ xem)."
+          checked={autoApprove}
+          onCheckedChange={setAutoApprove}
+        />
+      </div>
+    </Card>
   );
 }
 
 function UserRow({ user, me }: { user: SessionUser; me: string }) {
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState(false);
+  const self = user.id === me;
 
   async function patch(change: Partial<Pick<SessionUser, "role" | "status">>, message: string) {
     setBusy(true);
@@ -81,7 +181,7 @@ function UserRow({ user, me }: { user: SessionUser; me: string }) {
       toast.success(message, { description: user.email });
       revalidate("/api/users");
     } catch (e) {
-      toast.error("Không cập nhật được", { description: (e as Error).message });
+      toast.error("Chưa cập nhật được", { description: (e as Error).message });
     } finally {
       setBusy(false);
     }
@@ -91,54 +191,53 @@ function UserRow({ user, me }: { user: SessionUser; me: string }) {
     setBusy(true);
     try {
       await api(`/api/users/${user.id}`, { method: "DELETE" });
-      toast.success("Đã xoá người dùng", { description: user.email });
+      toast.success("Đã xoá tài khoản", { description: user.email });
       revalidate("/api/users");
       setConfirm(false);
     } catch (e) {
-      toast.error("Không xoá được", { description: (e as Error).message });
+      toast.error("Chưa xoá được", { description: (e as Error).message });
     } finally {
       setBusy(false);
     }
   }
 
-  const self = user.id === me;
-
   return (
-    <li className="flex flex-wrap items-center gap-3 border-b border-line/70 py-3 last:border-b-0">
-      <Avatar user={user} size={36} />
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <span className="truncate text-[13px] font-medium text-text">{user.name}</span>
-          {self && <span className="font-mono text-[10px] text-mute">(bạn)</span>}
+    <li className="space-y-3 py-4">
+      <div className="flex items-center gap-3.5">
+        <Avatar user={user} size={40} />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <span className="truncate text-sm font-medium text-ink">{user.name}</span>
+            {self && <span className="shrink-0 text-xs text-ink-3">(thầy cô)</span>}
+            {user.status === "pending" ? (
+              <Badge tone="warning" dot pulse className="shrink-0">
+                Chờ duyệt
+              </Badge>
+            ) : user.status === "disabled" ? (
+              <Badge tone="critical" className="shrink-0">
+                Đã khoá
+              </Badge>
+            ) : null}
+          </div>
+          <div className="truncate text-[13px] text-ink-3">
+            {user.email} · đăng nhập {formatRelative(user.last_login)}
+          </div>
         </div>
-        <div className="truncate font-mono text-[11px] text-dim">{user.email}</div>
-        <div className="text-[10px] text-mute">Đăng nhập {formatRelative(user.last_login)}</div>
       </div>
-      {user.status === "pending" ? (
-        <Badge tone="warning" dot pulse>
-          Chờ duyệt
-        </Badge>
-      ) : user.status === "disabled" ? (
-        <Badge tone="critical">Đã khoá</Badge>
-      ) : (
-        <Badge tone="good" dot>
-          Hoạt động
-        </Badge>
-      )}
-      <Select
-        value={user.role}
-        disabled={busy}
-        onChange={(e) => patch({ role: e.target.value as Role }, "Đã đổi vai trò")}
-        aria-label={`Vai trò của ${user.email}`}
-        className="h-8 text-[13px]"
-      >
-        {(["viewer", "operator", "admin"] as Role[]).map((role) => (
-          <option key={role} value={role}>
-            {ROLE_LABELS[role]}
-          </option>
-        ))}
-      </Select>
-      <div className="flex gap-1.5">
+      <div className="flex flex-wrap items-center gap-2 pl-[54px]">
+        <Select
+          value={user.role}
+          disabled={busy || self}
+          onChange={(e) => patch({ role: e.target.value as Role }, "Đã đổi quyền")}
+          aria-label={`Quyền của ${user.email}`}
+          className="w-40"
+        >
+          {(["viewer", "operator", "admin"] as Role[]).map((role) => (
+            <option key={role} value={role}>
+              {ROLE_LABELS[role]}
+            </option>
+          ))}
+        </Select>
         {user.status === "pending" && (
           <Button size="sm" variant="primary" loading={busy} onClick={() => patch({ status: "active" }, "Đã duyệt tài khoản")}>
             <UserCheck /> Duyệt
@@ -163,8 +262,8 @@ function UserRow({ user, me }: { user: SessionUser; me: string }) {
       <Confirm
         open={confirm}
         onOpenChange={setConfirm}
-        title="Xoá người dùng?"
-        description={`${user.email} sẽ mất quyền truy cập. Nếu đăng nhập Google lại, tài khoản được tạo mới ở trạng thái chờ duyệt.`}
+        title="Xoá tài khoản này?"
+        description={`${user.email} sẽ không vào được hệ thống. Nếu đăng nhập lại, tài khoản sẽ ở trạng thái chờ duyệt.`}
         confirmLabel="Xoá"
         danger
         loading={busy}
@@ -174,45 +273,40 @@ function UserRow({ user, me }: { user: SessionUser; me: string }) {
   );
 }
 
-function UsersSection() {
+function UsersCard() {
   const me = useConnection((s) => s.user?.id ?? "");
   const { data: health } = useHealth();
   const google = health?.auth.mode === "google";
   const { data } = useUsers(google);
-  const pending = data?.users.filter((u) => u.status === "pending").length ?? 0;
+  const users = data?.users ?? [];
+  const pending = users.filter((u) => u.status === "pending").length;
 
   return (
-    <Section>
-      <SectionTitle
+    <Card>
+      <CardHeader
         eyebrow="Quản trị"
         title="Người dùng"
+        description="Thầy cô tự đăng ký bằng Google; quản trị viên duyệt và phân quyền."
         action={pending > 0 && <Badge tone="warning">{pending} chờ duyệt</Badge>}
       />
       {!google ? (
-        <p className="mt-3 text-sm text-dim">
-          Quản lý người dùng hoạt động khi máy chủ bật đăng nhập Google (<span className="font-mono">GOOGLE_CLIENT_ID</span>{" "}
-          trong .env).
-        </p>
+        <Notice tone="neutral" className="mt-5">
+          Quản lý người dùng hoạt động khi đã bật đăng nhập Google.
+        </Notice>
       ) : !data ? (
-        <Skeleton className="mt-4 h-24" />
+        <Skeleton className="mt-5 h-24" />
       ) : (
-        <>
-          <p className="mt-2 text-xs text-mute">
-            Người dùng tự đăng ký bằng Google. Tài khoản mới ở trạng thái <b className="text-dim">chờ duyệt</b> (trừ email
-            quản trị và tên miền được phép trong .env).
-          </p>
-          <ul className="mt-3">
-            {data.users.map((user) => (
-              <UserRow key={user.id} user={user} me={me} />
-            ))}
-          </ul>
-        </>
+        <ul className="hairline-divide mt-2">
+          {users.map((user) => (
+            <UserRow key={user.id} user={user} me={me} />
+          ))}
+        </ul>
       )}
-    </Section>
+    </Card>
   );
 }
 
-function AiSettings({ initial, canEdit }: { initial: Settings; canEdit: boolean }) {
+function AiCard({ initial, canEdit }: { initial: Settings; canEdit: boolean }) {
   const [draft, setDraft] = useState(initial);
   const [saving, setSaving] = useState(false);
   const dirty = JSON.stringify(draft) !== JSON.stringify(initial);
@@ -224,42 +318,45 @@ function AiSettings({ initial, canEdit }: { initial: Settings; canEdit: boolean 
   async function save() {
     setSaving(true);
     try {
-      await api("/api/settings", { method: "PUT", json: draft });
-      toast.success("Đã lưu cài đặt");
+      const { bullying_threshold, bullying_min_hits, event_cooldown, anger_threshold, pre_roll_seconds, post_roll_seconds, record_fps, video_sample_fps, record_max_width, tts_alert } = draft;
+      await api("/api/settings", {
+        method: "PUT",
+        json: { bullying_threshold, bullying_min_hits, event_cooldown, anger_threshold, pre_roll_seconds, post_roll_seconds, record_fps, video_sample_fps, record_max_width, tts_alert },
+      });
+      toast.success("Đã lưu cài đặt AI");
       revalidate("/api/settings");
-      revalidate("/api/storage");
     } catch (e) {
-      toast.error("Không lưu được", { description: (e as Error).message });
+      toast.error("Chưa lưu được", { description: (e as Error).message });
     } finally {
       setSaving(false);
     }
   }
 
   return (
-    <Section>
-      <SectionTitle
-        eyebrow="Máy chủ"
-        title="Phát hiện & ghi hình"
+    <Card>
+      <CardHeader
+        eyebrow="AI & ghi hình"
+        title="Độ nhạy phát hiện"
         action={
           canEdit && (
-            <div className="flex gap-2">
+            <>
               {dirty && (
                 <Button size="sm" variant="ghost" onClick={() => setDraft(initial)}>
                   <RotateCcw /> Hoàn tác
                 </Button>
               )}
               <Button size="sm" variant="primary" onClick={save} loading={saving} disabled={!dirty}>
-                <Save /> Lưu
+                {!saving && <Save />} Lưu
               </Button>
-            </div>
+            </>
           )
         }
       />
-      {!canEdit && <p className="mt-2 text-xs text-mute">Chỉ quản trị viên được thay đổi các thông số này.</p>}
-      <fieldset disabled={!canEdit} className="mt-5 grid gap-x-8 gap-y-6 disabled:opacity-60 lg:grid-cols-2">
+      {!canEdit && <p className="mt-2 text-[13px] text-ink-3">Chỉ quản trị viên được thay đổi các thông số này.</p>}
+      <fieldset disabled={!canEdit} className="mt-6 grid gap-x-10 gap-y-7 disabled:opacity-60 lg:grid-cols-2">
         <RangeField
-          label="Ngưỡng cảnh báo bắt nạt"
-          hint="Độ tin cậy tối thiểu của lớp “Nghi bắt nạt” để tính là 1 lần phát hiện."
+          label="Ngưỡng báo động bắt nạt"
+          hint="Thấp hơn = nhạy hơn nhưng dễ báo nhầm. Khuyến nghị 65–80%."
           value={draft.bullying_threshold}
           min={30}
           max={99}
@@ -268,14 +365,14 @@ function AiSettings({ initial, canEdit }: { initial: Settings; canEdit: boolean 
         />
         <RangeField
           label="Số lần phát hiện liên tiếp"
-          hint={`Mỗi lần cách nhau ~0.5 giây → cảnh báo sau khoảng ${(draft.bullying_min_hits * 0.5).toFixed(1)} giây.`}
+          hint={`Báo động sau khoảng ${(draft.bullying_min_hits * 0.5).toFixed(1)} giây liên tục.`}
           value={draft.bullying_min_hits}
           min={1}
           max={12}
           onChange={(v) => set("bullying_min_hits", v)}
         />
         <RangeField
-          label="Khoảng nghỉ giữa 2 cảnh báo cùng loại"
+          label="Nghỉ giữa 2 lần báo cùng camera"
           value={draft.event_cooldown}
           min={0}
           max={300}
@@ -284,8 +381,8 @@ function AiSettings({ initial, canEdit }: { initial: Settings; canEdit: boolean 
           onChange={(v) => set("event_cooldown", v)}
         />
         <RangeField
-          label="Ngưỡng la hét / căng thẳng"
-          hint="Tính từ mức âm lượng và lời nói tiêu cực."
+          label="Ngưỡng la hét, căng thẳng"
+          hint="Tính từ âm lượng và lời nói tiêu cực."
           value={draft.anger_threshold}
           min={30}
           max={100}
@@ -293,7 +390,7 @@ function AiSettings({ initial, canEdit }: { initial: Settings; canEdit: boolean 
           onChange={(v) => set("anger_threshold", v)}
         />
         <RangeField
-          label="Ghi trước sự kiện (pre-roll)"
+          label="Lưu video trước sự việc"
           value={draft.pre_roll_seconds}
           min={0}
           max={30}
@@ -301,7 +398,7 @@ function AiSettings({ initial, canEdit }: { initial: Settings; canEdit: boolean 
           onChange={(v) => set("pre_roll_seconds", v)}
         />
         <RangeField
-          label="Ghi sau sự kiện (post-roll)"
+          label="Lưu video sau sự việc"
           value={draft.post_roll_seconds}
           min={3}
           max={120}
@@ -309,15 +406,15 @@ function AiSettings({ initial, canEdit }: { initial: Settings; canEdit: boolean 
           onChange={(v) => set("post_roll_seconds", v)}
         />
         <RangeField
-          label="FPS clip ghi hình"
+          label="Độ mượt của clip lưu"
           value={draft.record_fps}
           min={2}
           max={25}
-          unit=" fps"
+          unit=" khung/giây"
           onChange={(v) => set("record_fps", v)}
         />
         <RangeField
-          label="Tốc độ lấy mẫu khi AI xử lý video"
+          label="Độ kỹ khi AI xem lại video"
           hint="Nhiều khung/giây hơn = chính xác hơn nhưng chậm hơn."
           value={draft.video_sample_fps}
           min={0.5}
@@ -326,140 +423,54 @@ function AiSettings({ initial, canEdit }: { initial: Settings; canEdit: boolean 
           unit=" khung/giây"
           onChange={(v) => set("video_sample_fps", v)}
         />
-        <Field label="Độ rộng tối đa clip ghi hình">
-          <Select
-            value={String(draft.record_max_width)}
-            onChange={(e) => set("record_max_width", Number(e.target.value))}
-            className="w-full"
-          >
-            {[640, 960, 1280, 1920].map((w) => (
-              <option key={w} value={w}>
-                {w}px {w === 1280 ? "(khuyến nghị)" : ""}
+        <Field label="Độ nét clip lưu">
+          <Select value={String(draft.record_max_width)} onChange={(e) => set("record_max_width", Number(e.target.value))}>
+            {[
+              [640, "Tiết kiệm"],
+              [960, "Vừa"],
+              [1280, "Nét (khuyên dùng)"],
+              [1920, "Rất nét"],
+            ].map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
               </option>
             ))}
           </Select>
         </Field>
-        <label className="flex items-center justify-between gap-4 rounded-md border border-line bg-bg/40 px-3 py-2.5">
-          <span>
-            <span className="block text-[13px] font-medium">Đọc cảnh báo bằng loa máy chủ</span>
-            <span className="block text-xs text-mute">pyttsx3 đọc “Cảnh báo…” khi có sự kiện nghiêm trọng</span>
-          </span>
-          <Switch checked={draft.tts_alert} onCheckedChange={(v) => set("tts_alert", v)} />
-        </label>
+        <SwitchRow
+          label="Đọc cảnh báo qua loa"
+          hint="Loa máy chủ tự đọc khi có sự việc nghiêm trọng"
+          checked={draft.tts_alert}
+          onCheckedChange={(v) => set("tts_alert", v)}
+        />
       </fieldset>
-    </Section>
+    </Card>
   );
 }
 
-function AlertSection() {
-  const { isOperator } = useRole();
-  const [sound, setSound] = useState(soundEnabled);
-  const [text, setText] = useState("Cảnh báo. Phát hiện dấu hiệu bắt nạt tại hành lang tầng hai.");
-
-  return (
-    <Section>
-      <SectionTitle eyebrow="Thông báo" title="Âm thanh cảnh báo" />
-      <div className="mt-4 space-y-4">
-        <label className="flex items-center justify-between gap-4 rounded-md border border-line bg-bg/40 px-3 py-2.5">
-          <span>
-            <span className="block text-[13px] font-medium">Còi báo trên trình duyệt này</span>
-            <span className="block text-xs text-mute">Phát tiếng bíp khi có cảnh báo nghiêm trọng</span>
-          </span>
-          <div className="flex items-center gap-2">
-            <Button size="icon-sm" variant="ghost" onClick={playAlarm} aria-label="Nghe thử">
-              <Volume2 />
-            </Button>
-            <Switch
-              checked={sound}
-              onCheckedChange={(v) => {
-                setSound(v);
-                try {
-                  localStorage.setItem(SOUND_KEY, v ? "on" : "off");
-                } catch {
-                  /* ignore */
-                }
-              }}
-            />
-          </div>
-        </label>
-        {isOperator && (
-          <div className="flex gap-2">
-            <Input value={text} onChange={(e) => setText(e.target.value)} />
-            <Button
-              variant="secondary"
-              onClick={async () => {
-                const res = await api<{ success: boolean; error?: string }>("/api/speech/speak", {
-                  method: "POST",
-                  json: { text },
-                });
-                if (res.success) toast.success("Đã gửi lệnh đọc tới loa máy chủ");
-                else toast.error(res.error ?? "Không đọc được");
-              }}
-            >
-              <Megaphone /> Phát loa
-            </Button>
-          </div>
-        )}
-      </div>
-    </Section>
-  );
-}
-
-function ServerSection() {
-  const router = useRouter();
-  const baseUrl = useConnection((s) => s.baseUrl);
-  const setBaseUrl = useConnection((s) => s.setBaseUrl);
+function SystemCard() {
   const { data: system } = useSystem();
-  const { data: health } = useHealth();
-  const [value, setValue] = useState(baseUrl);
-
+  if (!system) return <Skeleton className="h-48" />;
+  const rows = [
+    ["Phiên bản", `Camera AI ${system.version}`],
+    ["Hoạt động liên tục", formatUptime(system.uptime)],
+    ["AI phân tích hình ảnh", system.engine.running ? `Đang chạy · ${system.model.last_ms} ms/lần` : "Đang dừng"],
+    ["Nghe lời nói", system.speech.whisper ? "Đang bật" : "Chưa bật"],
+    ["Máy chủ", system.platform],
+    ["Kết nối trực tiếp", `${system.realtime_clients} thiết bị`],
+  ];
   return (
-    <Section>
-      <SectionTitle eyebrow="Kết nối" title="Máy chủ AI" />
-      <div className="mt-4 space-y-4">
-        <form
-          className="flex gap-2"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (value.trim() === baseUrl) return;
-            setBaseUrl(value);
-            router.replace("/login");
-          }}
-        >
-          <Input value={value} onChange={(e) => setValue(e.target.value)} className="font-mono text-[13px]" />
-          <Button type="submit" variant="secondary" disabled={value.trim() === baseUrl}>
-            <Check /> Đổi
-          </Button>
-        </form>
-        <p className="text-xs text-mute">
-          Đổi máy chủ sẽ đăng xuất và đăng nhập lại. Đăng nhập:{" "}
-          <span className="text-dim">
-            {health?.auth.mode === "google" ? "Google" : health?.auth.mode === "token" ? "API token" : "chế độ nội bộ"}
-          </span>
-        </p>
-        {system && (
-          <dl className="grid grid-cols-2 gap-x-6 gap-y-2 border-t border-line pt-4 text-[13px]">
-            {[
-              ["Phiên bản", `${system.name} v${system.version}`],
-              ["Máy chủ", hostOf(baseUrl)],
-              ["Hệ điều hành", system.platform],
-              ["Python", system.python],
-              ["Hoạt động", formatUptime(system.uptime)],
-              ["RAM tiến trình", formatBytes(system.memory.process)],
-              ["Mô hình", `${system.model.architecture} · ${system.model.input.join("×")}`],
-              ["Lớp nhận diện", system.model.classes.map(classLabel).join(", ")],
-              ["Mã hoá clip", system.recorder.encoder ?? "—"],
-              ["Giọng nói", system.speech.whisper ? "Whisper đang chạy" : "Chưa cài faster-whisper"],
-            ].map(([label, value]) => (
-              <div key={label} className="min-w-0">
-                <dt className="text-xs text-mute">{label}</dt>
-                <dd className="truncate text-text">{value}</dd>
-              </div>
-            ))}
-          </dl>
-        )}
-      </div>
-    </Section>
+    <Card>
+      <CardHeader eyebrow="Máy chủ" title="Hệ thống" />
+      <dl className="mt-5 grid gap-x-8 gap-y-4 sm:grid-cols-2">
+        {rows.map(([label, value]) => (
+          <div key={label} className="min-w-0">
+            <dt className="text-xs text-ink-3">{label}</dt>
+            <dd className="mt-0.5 truncate text-sm text-ink">{value}</dd>
+          </div>
+        ))}
+      </dl>
+    </Card>
   );
 }
 
@@ -468,25 +479,20 @@ export function SettingsView() {
   const { data: settings } = useSettings();
 
   return (
-    <div className="grid gap-5 xl:grid-cols-2">
-      <div className="space-y-5">
-        <AccountSection />
-        {isAdmin && <UsersSection />}
-        <AlertSection />
+    <div className="space-y-7">
+      <PageHeader eyebrow="Hệ thống" title="Cài đặt" description="Tài khoản, thông báo và các thông số của hệ thống." />
+      <div className="grid gap-5 lg:gap-6 xl:grid-cols-2">
+        <div className="space-y-5 lg:space-y-6">
+          <AccountCard />
+          <AlertsCard />
+          {isAdmin && settings && <SchoolCard key={`${settings.school_name}|${settings.admin_emails}|${settings.allowed_domains}|${settings.auto_approve}`} settings={settings} />}
+        </div>
+        <div className="space-y-5 lg:space-y-6">
+          {isAdmin && <UsersCard />}
+          {settings ? <AiCard key={JSON.stringify(settings)} initial={settings} canEdit={isAdmin} /> : <Skeleton className="h-96" />}
+          {isAdmin && <SystemCard />}
+        </div>
       </div>
-      <div className="space-y-5">
-        {settings ? (
-          <AiSettings key={JSON.stringify(settings)} initial={settings} canEdit={isAdmin} />
-        ) : (
-          <Skeleton className="h-96" />
-        )}
-        <ServerSection />
-      </div>
-      {!isAdmin && (
-        <p className="flex items-center gap-2 text-xs text-mute xl:col-span-2">
-          <Users className="size-3.5" /> Quản lý người dùng dành cho quản trị viên.
-        </p>
-      )}
     </div>
   );
 }

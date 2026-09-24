@@ -7,6 +7,7 @@ import { useConnection } from "./connection";
 import type {
   AppEvent,
   Camera,
+  DiscoverySnapshot,
   Health,
   HistoryPoint,
   SessionUser,
@@ -53,11 +54,11 @@ export const useStats = (hours: number) =>
     keepPreviousData: true,
   });
 
-export const useSystem = () =>
-  useApi<SystemInfo>("/api/system", { refreshInterval: 5000 });
+export const useSystem = (enabled = true) =>
+  useApi<SystemInfo>(enabled ? "/api/system" : null, { refreshInterval: 5000 });
 
-export const useStorage = () =>
-  useApi<StorageSummary>("/api/storage", { refreshInterval: 10000 });
+export const useStorage = (enabled = true) =>
+  useApi<StorageSummary>(enabled ? "/api/storage" : null, { refreshInterval: 10000 });
 
 export const useSettings = () => useApi<Settings>("/api/settings");
 
@@ -79,13 +80,17 @@ export const useVideos = (queryString: string) =>
 export const useVideo = (id: string | null) =>
   useApi<Video>(id ? `/api/videos/${id}` : null);
 
-/** /api/health không cần đăng nhập: biết máy chủ có sống và đang dùng kiểu đăng nhập nào. */
+/** Camera trong cùng mạng WiFi/LAN với máy chủ (chỉ quản trị viên). */
+export const useDiscovered = (enabled: boolean) =>
+  useApi<DiscoverySnapshot>(enabled ? "/api/cameras/discovered" : null, { refreshInterval: 60000 });
+
+/** /api/health không cần đăng nhập: biết hệ thống có sống và đang dùng kiểu đăng nhập nào. */
 export function useHealth() {
   const baseUrl = useConnection((s) => s.baseUrl);
   return useSWR<Health>(
     baseUrl ? ([baseUrl, "/api/health"] as Key) : null,
     ([base]: Key) => api<Health>("/api/health", { baseUrl: base, token: "" }),
-    { refreshInterval: 30000, shouldRetryOnError: true, errorRetryInterval: 4000 },
+    { refreshInterval: 30000, shouldRetryOnError: true, errorRetryInterval: 5000 },
   );
 }
 

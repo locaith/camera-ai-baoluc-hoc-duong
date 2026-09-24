@@ -5,39 +5,39 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
+  ArrowUpRight,
   AudioLines,
   Camera as CameraIcon,
-  CircleDot,
   Cctv,
+  CircleDot,
   Flag,
   MessageSquareText,
   Pencil,
   Power,
   PowerOff,
-  ScanEye,
 } from "lucide-react";
 
 import { useCameraActions } from "@/components/camera/camera-actions";
-import { CameraStateBadge } from "@/components/camera/camera-bits";
+import { aiVerdict, CameraStateBadge, riskOf } from "@/components/camera/camera-bits";
 import { EditCameraDialog } from "@/components/camera/camera-dialogs";
 import { CameraTile } from "@/components/camera/camera-tile";
 import { RiskChart } from "@/components/charts/risk-chart";
 import { EventRow } from "@/components/events/event-bits";
 import { VideoCard } from "@/components/videos/video-card";
 import { Button } from "@/components/ui/button";
+import { Card, CardHeader } from "@/components/ui/card";
 import { Empty, Meter, Skeleton, severityTone } from "@/components/ui/feedback";
-import { SectionTitle } from "@/components/ui/stat-tile";
 import { useRole } from "@/lib/connection";
 import { formatRelative } from "@/lib/format";
 import { useCamera, useCameraHistory, useEvents, useSettings, useVideos } from "@/lib/hooks";
-import { classLabel } from "@/lib/labels";
+import { classLabel, INCIDENT_TYPES } from "@/lib/labels";
 import { cn } from "@/lib/utils";
 
 function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="flex items-center justify-between gap-3 py-1.5 text-[13px]">
-      <span className="text-dim">{label}</span>
-      <span className="truncate text-right font-mono text-xs text-text">{value}</span>
+    <div className="flex items-center justify-between gap-4 py-3 text-sm">
+      <span className="shrink-0 text-ink-3">{label}</span>
+      <span className="min-w-0 truncate text-right text-ink">{value}</span>
     </div>
   );
 }
@@ -48,26 +48,26 @@ export function CameraDetailView({ id }: { id: string }) {
   const { isAdmin, isOperator } = useRole();
   const { data: camera, error } = useCamera(id);
   const { data: history } = useCameraHistory(camera?.state === "online" ? id : null);
-  const { data: events } = useEvents(`camera_id=${id}&limit=8`);
-  const { data: videos } = useVideos(`camera_id=${id}&limit=6`);
+  const { data: events } = useEvents(`camera_id=${id}&type=${INCIDENT_TYPES.join(",")}&limit=6`);
+  const { data: videos } = useVideos(`camera_id=${id}&limit=4`);
   const { data: settings } = useSettings();
   const [editing, setEditing] = useState(false);
 
   if (error) {
     return (
-      <div className="panel">
+      <Card>
         <Empty
           icon={Cctv}
           title="Không tìm thấy camera"
           action={
-            <Button onClick={() => router.push("/cameras")}>
-              <ArrowLeft /> Về danh sách camera
+            <Button variant="secondary" onClick={() => router.push("/live")}>
+              <ArrowLeft /> Về màn hình trực tiếp
             </Button>
           }
         >
-          {error.message}
+          Camera có thể đã bị xoá, hoặc điện thoại đã dừng quay.
         </Empty>
-      </div>
+      </Card>
     );
   }
 
@@ -76,239 +76,218 @@ export function CameraDetailView({ id }: { id: string }) {
   const analysis = camera.analysis;
   const threshold = settings?.bullying_threshold ?? 70;
   const probs = Object.entries(analysis?.probs ?? {}).sort((a, b) => b[1] - a[1]);
+  const verdict = aiVerdict(analysis, threshold);
   const speech = camera.speech;
+  const online = camera.state === "online";
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-center gap-3">
-        <Button variant="ghost" size="icon-sm" asChild aria-label="Quay lại">
-          <Link href="/cameras">
-            <ArrowLeft />
-          </Link>
-        </Button>
-        <div className="min-w-0">
-          <h2 className="truncate font-display text-xl font-semibold tracking-wide">{camera.name}</h2>
-          <div className="text-xs text-dim">
-            {camera.location || "Chưa đặt vị trí"} · <span className="font-mono">{camera.id}</span>
+    <div className="space-y-7">
+      <div className="animate-rise">
+        <Link href={camera.virtual ? "/live" : "/cameras"} className="inline-flex items-center gap-1.5 text-[13px] text-ink-3 hover:text-ink">
+          <ArrowLeft className="size-4" /> {camera.virtual ? "Trực tiếp" : "Camera"}
+        </Link>
+        <div className="mt-4 flex flex-wrap items-end justify-between gap-4">
+          <div className="min-w-0">
+            <h1 className="display truncate text-[32px] leading-tight text-ink md:text-[40px]">{camera.name}</h1>
+            <div className="mt-2 flex flex-wrap items-center gap-2.5 text-[15px] text-ink-2">
+              <CameraStateBadge state={camera.state} />
+              {camera.location || (camera.virtual ? `Quay bởi ${camera.owner}` : "Chưa đặt vị trí")}
+            </div>
           </div>
-        </div>
-        <CameraStateBadge state={camera.state} />
-        <div className="ml-auto flex flex-wrap gap-2">
-          {isOperator &&
-            (camera.recording ? (
-              <Button variant="danger" size="sm" onClick={() => actions.stopRecording(camera)}>
-                <CircleDot /> Dừng ghi
+          {!camera.virtual && (
+            <div className="flex flex-wrap gap-2">
+              {isOperator &&
+                (camera.recording ? (
+                  <Button variant="danger" size="sm" onClick={() => actions.stopRecording(camera)}>
+                    <CircleDot /> Dừng ghi
+                  </Button>
+                ) : (
+                  <Button size="sm" onClick={() => actions.record(camera, 30)} disabled={!online}>
+                    <CircleDot className="text-critical" /> Ghi 30 giây
+                  </Button>
+                ))}
+              <Button size="sm" onClick={() => actions.snapshot(camera)} disabled={!online}>
+                <CameraIcon /> Chụp ảnh
               </Button>
-            ) : (
-              <Button size="sm" onClick={() => actions.record(camera, 30)} disabled={camera.state !== "online"}>
-                <CircleDot className="text-critical" /> Ghi 30s
-              </Button>
-            ))}
-          <Button size="sm" onClick={() => actions.snapshot(camera)} disabled={camera.state !== "online"}>
-            <CameraIcon /> Chụp ảnh
-          </Button>
-          {isOperator && (
-            <Button size="sm" onClick={() => actions.mark(camera)} disabled={camera.state !== "online"}>
-              <Flag /> Đánh dấu
-            </Button>
-          )}
-          {isAdmin && (
-            <>
-              <Button size="sm" onClick={() => setEditing(true)}>
-                <Pencil /> Sửa
-              </Button>
-              <Button
-                size="sm"
-                variant={camera.enabled ? "ghost" : "primary"}
-                onClick={() => actions.setPower(camera, !camera.enabled)}
-              >
-                {camera.enabled ? <PowerOff /> : <Power />}
-                {camera.enabled ? "Tắt" : "Bật"}
-              </Button>
-            </>
+              {isOperator && (
+                <Button size="sm" onClick={() => actions.mark(camera)} disabled={!online}>
+                  <Flag /> Đánh dấu
+                </Button>
+              )}
+              {isAdmin && (
+                <>
+                  <Button size="sm" onClick={() => setEditing(true)}>
+                    <Pencil /> Sửa
+                  </Button>
+                  <Button size="sm" variant={camera.enabled ? "ghost" : "primary"} onClick={() => actions.setPower(camera, !camera.enabled)}>
+                    {camera.enabled ? <PowerOff /> : <Power />}
+                    {camera.enabled ? "Tắt" : "Bật"}
+                  </Button>
+                </>
+              )}
+            </div>
           )}
         </div>
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="min-w-0 space-y-5">
+      <div className="grid gap-5 lg:gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
+        <div className="min-w-0 space-y-5 lg:space-y-6">
           <CameraTile camera={camera} width={1280} fps={12} size="lg" />
-
-          <div className="panel p-4 md:p-5">
-            <SectionTitle eyebrow="2 phút gần nhất" title="Diễn biến nguy cơ" className="mb-4" />
-            {history?.history.length ? (
-              <RiskChart history={history.history} threshold={threshold} showAnger={camera.has_audio} />
-            ) : (
-              <p className="py-10 text-center text-sm text-dim">
-                {camera.state === "online" ? "Đang thu thập dữ liệu…" : "Camera chưa trực tuyến."}
-              </p>
-            )}
-          </div>
+          <Card>
+            <CardHeader eyebrow="2 phút gần nhất" title="Diễn biến nguy cơ" />
+            <div className="mt-5">
+              {history?.history.length ? (
+                <RiskChart history={history.history} threshold={threshold} />
+              ) : (
+                <p className="py-12 text-center text-sm text-ink-3">
+                  {online ? "Đang thu thập dữ liệu…" : "Camera chưa hoạt động."}
+                </p>
+              )}
+            </div>
+          </Card>
         </div>
 
-        <div className="min-w-0 space-y-5">
-          <div className="panel p-4">
-            <SectionTitle eyebrow="Mô hình hình ảnh" title="Phân tích AI" />
-            {camera.ai_enabled ? (
+        <div className="min-w-0 space-y-5 lg:space-y-6">
+          <Card>
+            <CardHeader eyebrow="AI nhận định" title={camera.ai_enabled ? verdict.label : "AI đang tắt"} />
+            {camera.ai_enabled && (
               <>
-                <div className="mt-4 flex items-baseline justify-between">
-                  <span className={cn("text-xl font-semibold", analysis?.bullying && "text-critical")}>
-                    {classLabel(analysis?.class)}
+                <div className="mt-4 flex items-baseline gap-2">
+                  <span className={cn("numeral text-[44px] leading-none", verdict.level === 2 ? "text-critical" : "text-ink")}>
+                    {analysis ? riskOf(analysis).toFixed(0) : "—"}
                   </span>
-                  <span className="font-mono text-sm text-dim tabular">
-                    {analysis ? `${analysis.confidence.toFixed(1)}%` : "—"}
-                  </span>
+                  <span className="text-sm text-ink-3">% nguy cơ bắt nạt</span>
                 </div>
-                <div className="mt-4 space-y-2.5">
-                  {probs.map(([name, value]) => {
-                    const bullying = name.includes("bullying");
-                    return (
-                      <div key={name}>
-                        <div className="flex justify-between text-xs">
-                          <span className="text-dim">{classLabel(name)}</span>
-                          <span className="font-mono text-text tabular">{value.toFixed(1)}%</span>
-                        </div>
-                        <Meter
-                          className="mt-1"
-                          value={value}
-                          tone={bullying ? (value >= threshold ? "critical" : "bullying") : "neutral"}
-                          label={classLabel(name)}
-                        />
+                <div className="mt-5 space-y-3">
+                  {probs.map(([name, value]) => (
+                    <div key={name}>
+                      <div className="flex justify-between text-[13px]">
+                        <span className="text-ink-2">{classLabel(name)}</span>
+                        <span className="text-ink tabular">{value.toFixed(0)}%</span>
                       </div>
-                    );
-                  })}
+                      <Meter
+                        className="mt-1.5"
+                        value={value}
+                        tone={name.includes("bullying") ? (value >= threshold ? "critical" : "bullying") : "neutral"}
+                        label={classLabel(name)}
+                      />
+                    </div>
+                  ))}
                 </div>
-                <p className="mt-3 text-[11px] text-mute">
-                  Cảnh báo khi &quot;Nghi bắt nạt&quot; ≥ {threshold}% trong {settings?.bullying_min_hits ?? 3} lần
-                  phân tích liên tiếp.
+                <p className="mt-4 text-xs leading-relaxed text-ink-3">
+                  Báo động khi nguy cơ từ {threshold}% trở lên trong {settings?.bullying_min_hits ?? 3} lần phân tích liên
+                  tiếp (khoảng {((settings?.bullying_min_hits ?? 3) * 0.5).toFixed(1)} giây).
                 </p>
               </>
-            ) : (
-              <p className="mt-3 text-sm text-dim">AI đang tắt cho camera này.</p>
             )}
-          </div>
+          </Card>
 
-          <div className="panel p-4">
-            <SectionTitle eyebrow="Âm thanh" title="Giọng nói & mức căng thẳng" />
-            {camera.has_audio ? (
-              <div className="mt-4 space-y-4">
+          {camera.has_audio && (
+            <Card>
+              <CardHeader eyebrow="Âm thanh" title="Giọng nói & mức căng thẳng" />
+              <div className="mt-5 space-y-5">
                 <div>
-                  <div className="flex justify-between text-xs">
-                    <span className="flex items-center gap-1.5 text-dim">
-                      <AudioLines className="size-3.5" /> Mức âm thanh
+                  <div className="flex justify-between text-[13px]">
+                    <span className="flex items-center gap-1.5 text-ink-2">
+                      <AudioLines className="size-4" /> Âm lượng
                     </span>
-                    <span className="font-mono text-text tabular">{camera.audio.level.toFixed(0)}%</span>
+                    <span className="text-ink tabular">{camera.audio.level.toFixed(0)}%</span>
                   </div>
-                  <Meter className="mt-1.5" value={camera.audio.level} tone="info" label="Mức âm thanh" />
+                  <Meter className="mt-2" value={camera.audio.level} tone="info" label="Âm lượng" />
                 </div>
                 <div>
-                  <div className="flex justify-between text-xs">
-                    <span className="text-dim">Căng thẳng · {camera.anger.status}</span>
-                    <span className="font-mono text-text tabular">{camera.anger.value.toFixed(0)}%</span>
+                  <div className="flex justify-between text-[13px]">
+                    <span className="text-ink-2">Mức căng thẳng · {camera.anger.status}</span>
+                    <span className="text-ink tabular">{camera.anger.value.toFixed(0)}%</span>
                   </div>
-                  <Meter
-                    className="mt-1.5"
-                    value={camera.anger.value}
-                    tone={severityTone(camera.anger.value, 40, 70)}
-                    label="Mức căng thẳng"
-                  />
+                  <Meter className="mt-2" value={camera.anger.value} tone={severityTone(camera.anger.value, 40, 70)} label="Mức căng thẳng" />
                 </div>
-                <div className="rounded-md border border-line bg-bg/40 p-3">
-                  <div className="flex items-center gap-1.5 text-xs text-dim">
+                <div className="rounded-2xl bg-surface-2 p-4">
+                  <div className="flex items-center gap-1.5 text-xs text-ink-3">
                     <MessageSquareText className="size-3.5" /> Lời nói gần nhất
                   </div>
                   {speech.whisper ? (
                     speech.last_text ? (
-                      <>
-                        <p className={cn("mt-1.5 text-sm", speech.toxic ? "text-critical" : "text-text")}>
-                          “{speech.last_text}”
-                        </p>
-                        {speech.toxic && (
-                          <p className="mt-1 text-xs text-critical">Từ tiêu cực: {speech.bad_word}</p>
-                        )}
-                      </>
+                      <p className={cn("mt-2 font-serif text-[17px] leading-snug", speech.toxic ? "text-critical" : "text-ink")}>
+                        “{speech.last_text}”
+                      </p>
                     ) : (
-                      <p className="mt-1.5 text-sm text-mute">Chưa nghe thấy lời nói.</p>
+                      <p className="mt-2 text-sm text-ink-3">Chưa nghe thấy lời nói.</p>
                     )
                   ) : (
-                    <p className="mt-1.5 text-xs text-mute">
-                      Cài <span className="font-mono">faster-whisper</span> trên máy chủ để chuyển giọng nói thành
-                      văn bản và phát hiện từ ngữ tiêu cực.
-                    </p>
+                    <p className="mt-2 text-sm text-ink-3">Tính năng nghe lời nói chưa được bật trên máy chủ.</p>
                   )}
                 </div>
               </div>
-            ) : (
-              <p className="mt-3 text-sm text-dim">Luồng camera không có âm thanh.</p>
-            )}
-          </div>
+            </Card>
+          )}
 
-          <div className="panel p-4">
-            <SectionTitle eyebrow="Kỹ thuật" title="Thông tin luồng" />
-            <div className="mt-2 divide-y divide-line/70">
-              <InfoRow label="Độ phân giải" value={camera.width ? `${camera.width}×${camera.height}` : "—"} />
-              <InfoRow label="Codec · FPS" value={`${camera.codec ? camera.codec.toUpperCase() : "—"} · ${camera.fps}`} />
-              <InfoRow label="Âm thanh" value={camera.has_audio ? `${camera.audio.sample_rate} Hz` : "Không"} />
-              <InfoRow label="Kết nối từ" value={formatRelative(camera.connected_since)} />
-              <InfoRow label="RTSP" value={camera.rtsp_url} />
+          <Card>
+            <CardHeader eyebrow="Thông tin" title="Camera" />
+            <div className="hairline-divide mt-3">
+              <InfoRow label="Chất lượng hình" value={camera.width ? `${camera.width}×${camera.height} · ${camera.fps} khung/giây` : "—"} />
+              <InfoRow label="Âm thanh" value={camera.has_audio ? "Có" : "Không"} />
+              <InfoRow label="Hoạt động từ" value={formatRelative(camera.connected_since)} />
               <InfoRow
-                label="Ghi clip sự kiện"
-                value={camera.record_on_event ? `Bật · ${settings?.pre_roll_seconds ?? 5}s + ${settings?.post_roll_seconds ?? 10}s` : "Tắt"}
+                label="Lưu clip khi có sự việc"
+                value={camera.record_on_event ? `Bật · ${settings?.pre_roll_seconds ?? 5}s trước, ${settings?.post_roll_seconds ?? 10}s sau` : "Tắt"}
               />
+              {isAdmin && !camera.virtual && <InfoRow label="Luồng video" value={<span className="font-mono text-xs">{camera.rtsp_url}</span>} />}
             </div>
-            {camera.error && (
-              <p className="mt-2 rounded border border-critical/30 bg-critical/5 p-2 font-mono text-[11px] break-all whitespace-pre-line text-critical">
-                {camera.error}
+            {camera.error && camera.state === "error" && (
+              <p className="mt-3 rounded-2xl bg-critical-soft px-4 py-3 text-[13px] leading-relaxed text-critical">
+                Camera không phản hồi. Kiểm tra nguồn điện và dây mạng của camera.
               </p>
             )}
-          </div>
+          </Card>
         </div>
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-2">
-        <div className="panel p-4">
-          <SectionTitle
+      <div className="grid gap-5 lg:gap-6 xl:grid-cols-2">
+        <Card>
+          <CardHeader
             eyebrow="Camera này"
-            title="Cảnh báo gần đây"
+            title="Sự việc gần đây"
             action={
-              <Link href={`/events?camera=${camera.id}`} className="text-xs text-signal hover:underline">
-                Tất cả
-              </Link>
+              <Button variant="ghost" size="sm" asChild>
+                <Link href={`/incidents?camera=${camera.id}&status=all`}>
+                  Tất cả <ArrowUpRight />
+                </Link>
+              </Button>
             }
           />
-          <div className="mt-3 space-y-1">
+          <div className="mt-3 -mx-2">
             {events?.events.length ? (
               events.events.map((event) => (
-                <EventRow key={event.id} event={event} onClick={() => router.push(`/events?focus=${event.id}`)} />
+                <EventRow key={event.id} event={event} onClick={() => router.push(`/incidents?focus=${event.id}&status=all`)} />
               ))
             ) : (
-              <p className="py-8 text-center text-sm text-dim">Chưa có cảnh báo.</p>
+              <p className="py-10 text-center text-sm text-ink-3">Chưa có sự việc nào.</p>
             )}
           </div>
-        </div>
-        <div className="panel p-4">
-          <SectionTitle
+        </Card>
+        <Card>
+          <CardHeader
             eyebrow="Camera này"
             title="Video đã ghi"
             action={
-              <Link href={`/videos?camera=${camera.id}`} className="text-xs text-signal hover:underline">
-                Tất cả
-              </Link>
+              <Button variant="ghost" size="sm" asChild>
+                <Link href={`/videos?camera=${camera.id}`}>
+                  Tất cả <ArrowUpRight />
+                </Link>
+              </Button>
             }
           />
           {videos?.videos.length ? (
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              {videos.videos.slice(0, 4).map((video) => (
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              {videos.videos.map((video) => (
                 <VideoCard key={video.id} video={video} />
               ))}
             </div>
           ) : (
-            <p className="py-8 text-center text-sm text-dim">
-              <ScanEye className="mx-auto mb-2 size-5 text-mute" />
-              Chưa có video. Clip sẽ tự ghi khi AI phát hiện sự kiện.
-            </p>
+            <p className="py-10 text-center text-sm text-ink-3">Chưa có video. Clip sẽ tự lưu khi AI phát hiện sự việc.</p>
           )}
-        </div>
+        </Card>
       </div>
 
       <EditCameraDialog camera={editing ? camera : null} onOpenChange={(open) => !open && setEditing(false)} />

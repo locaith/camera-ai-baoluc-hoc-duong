@@ -6,9 +6,9 @@ import { persist } from "zustand/middleware";
 
 import type { SessionUser } from "./types";
 
-/** Địa chỉ máy chủ AI (FastAPI). Đặt NEXT_PUBLIC_API_URL trên Vercel. */
+/** Địa chỉ máy chủ AI của trường. Đặt NEXT_PUBLIC_API_URL trên Vercel. */
 export const DEFAULT_API_URL = normalizeUrl(
-  process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000",
+  process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8100",
 );
 
 export function normalizeUrl(value: string) {
@@ -18,11 +18,15 @@ export function normalizeUrl(value: string) {
 }
 
 interface SessionState {
+  /** Máy chủ đang dùng = apiOverride || DEFAULT_API_URL */
   baseUrl: string;
+  /** Chỉ dùng khi thử nghiệm (mở /login?api=...), bình thường để trống */
+  apiOverride: string;
   token: string;
   user: SessionUser | null;
-  setBaseUrl: (baseUrl: string) => void;
+  setApiOverride: (url: string) => void;
   setSession: (token: string, user: SessionUser) => void;
+  setUser: (user: SessionUser) => void;
   clearSession: () => void;
 }
 
@@ -30,14 +34,27 @@ export const useConnection = create<SessionState>()(
   persist(
     (set) => ({
       baseUrl: DEFAULT_API_URL,
+      apiOverride: "",
       token: "",
       user: null,
-      setBaseUrl: (baseUrl) =>
-        set({ baseUrl: normalizeUrl(baseUrl) || DEFAULT_API_URL, token: "", user: null }),
+      setApiOverride: (url) => {
+        const apiOverride = url.trim() ? normalizeUrl(url) : "";
+        set({ apiOverride, baseUrl: apiOverride || DEFAULT_API_URL, token: "", user: null });
+      },
       setSession: (token, user) => set({ token, user }),
+      setUser: (user) => set({ user }),
       clearSession: () => set({ token: "", user: null }),
     }),
-    { name: "camera-ai-session" },
+    {
+      // v2: không lưu địa chỉ máy chủ nữa để đổi NEXT_PUBLIC_API_URL là mọi người dùng theo
+      name: "camera-ai-session-v2",
+      partialize: ({ apiOverride, token, user }) => ({ apiOverride, token, user }),
+      merge: (persisted, current) => {
+        const saved = (persisted ?? {}) as Partial<SessionState>;
+        const apiOverride = saved.apiOverride ?? "";
+        return { ...current, ...saved, apiOverride, baseUrl: apiOverride || DEFAULT_API_URL };
+      },
+    },
   ),
 );
 
@@ -67,16 +84,4 @@ export function useIsClient() {
     () => true,
     () => false,
   );
-}
-
-/** Trang https gọi backend http (không phải localhost) sẽ bị trình duyệt chặn. */
-export function isMixedContent(baseUrl: string) {
-  if (typeof window === "undefined" || window.location.protocol !== "https:") return false;
-  try {
-    const url = new URL(baseUrl);
-    const local = ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
-    return url.protocol === "http:" && !local;
-  } catch {
-    return false;
-  }
 }

@@ -1,14 +1,13 @@
 "use client";
 
-import { AlertOctagon, ScanEye, VideoOff, WifiOff } from "lucide-react";
+import { ShieldAlert, Smartphone, VideoOff, WifiOff } from "lucide-react";
 
-import { formatTimecode, useNowSeconds } from "@/lib/clock";
-import { classLabel, STATE_LABELS } from "@/lib/labels";
+import { STATE_LABELS } from "@/lib/labels";
 import { useLiveFrame, useLiveStatus, useLiveThreshold } from "@/lib/live";
 import type { Camera } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-import { VuMeter } from "./camera-bits";
+import { VuMeter, aiVerdict, riskOf } from "./camera-bits";
 
 interface CameraTileProps {
   camera: Camera;
@@ -21,10 +20,19 @@ interface CameraTileProps {
   className?: string;
 }
 
-function Timecode() {
-  const now = useNowSeconds();
-  return <span className="tabular">{formatTimecode(now)}</span>;
-}
+const PILL = {
+  success: "bg-black/35 text-white",
+  warning: "bg-[#b54708]/85 text-white",
+  critical: "bg-critical text-white",
+  neutral: "bg-black/35 text-white/80",
+} as const;
+
+const DOT = {
+  success: "bg-[#5ee0a0]",
+  warning: "bg-white",
+  critical: "bg-white animate-breathe",
+  neutral: "bg-white/60",
+} as const;
 
 export function CameraTile({
   camera,
@@ -46,29 +54,19 @@ export function CameraTile({
   const audio = live?.audio_level ?? camera.audio.level;
   const hasAudio = live?.has_audio ?? camera.has_audio;
   const online = state === "online";
-  const alarm = online && camera.ai_enabled && Boolean(analysis?.bullying) && (analysis?.confidence ?? 0) >= threshold;
-  // Thanh rủi ro = xác suất lớp "nghi bắt nạt" (kể cả khi lớp khác đứng đầu)
-  const risk = analysis?.risk ?? (analysis?.bullying ? analysis.confidence : 0);
-
-  const text = {
-    sm: { name: "text-[12px]", meta: "text-[9px]", hud: "text-[11px]" },
-    md: { name: "text-[13px]", meta: "text-[10px]", hud: "text-xs" },
-    lg: { name: "text-[15px]", meta: "text-[11px]", hud: "text-sm" },
-  }[size];
+  const verdict = aiVerdict(analysis, threshold);
+  const alarm = online && camera.ai_enabled && verdict.level === 2;
+  const risk = riskOf(analysis);
+  const small = size === "sm";
 
   return (
     <div
       className={cn(
-        "brackets group relative aspect-video overflow-hidden rounded-lg border border-line bg-[#050608]",
+        "group relative aspect-video overflow-hidden rounded-[18px] bg-frame ring-1 ring-black/5",
         onSelect && "cursor-pointer",
-        alarm && "alarm",
+        alarm && "alarm-ring",
         className,
       )}
-      style={
-        {
-          "--bracket": alarm ? "var(--critical)" : online ? "rgba(52,211,153,0.65)" : undefined,
-        } as React.CSSProperties
-      }
       onClick={onSelect}
       role={onSelect ? "button" : undefined}
       tabIndex={onSelect ? 0 : undefined}
@@ -85,113 +83,105 @@ export function CameraTile({
         <img
           src={frame}
           alt={`Hình ảnh trực tiếp ${camera.name}`}
-          className="absolute inset-0 size-full object-contain"
+          className="absolute inset-0 size-full object-cover transition-transform duration-700 group-hover:scale-[1.015]"
           draggable={false}
         />
       ) : (
-        <div
-          className="absolute inset-0 grid place-items-center"
-          style={{
-            backgroundImage:
-              "repeating-linear-gradient(135deg, rgba(255,255,255,0.025) 0 10px, transparent 10px 20px)",
-          }}
-        >
-          <div className="flex flex-col items-center gap-2 px-6 text-center">
+        <div className="absolute inset-0 grid place-items-center bg-[radial-gradient(circle_at_50%_40%,#1c1f27,#0e0f12_70%)]">
+          <div className="flex flex-col items-center gap-2.5 px-6 text-center">
             {state === "connecting" || (online && !frame) ? (
-              <span className="size-6 animate-spin rounded-full border-2 border-signal/20 border-t-signal" />
+              <span className="size-6 animate-spin rounded-full border-2 border-white/15 border-t-white/70" />
             ) : state === "error" ? (
-              <WifiOff className="size-6 text-critical" />
+              <WifiOff className="size-6 text-white/50" strokeWidth={1.5} />
             ) : (
-              <VideoOff className="size-6 text-mute" />
+              <VideoOff className="size-6 text-white/40" strokeWidth={1.5} />
             )}
-            <span className={cn("font-mono tracking-widest text-dim uppercase", text.meta)}>
-              {online ? "Đang nhận hình" : camera.enabled ? STATE_LABELS[state] : "Camera đã tắt"}
+            <span className={cn("text-white/60", small ? "text-[11px]" : "text-[13px]")}>
+              {online ? "Đang nhận hình…" : camera.enabled ? STATE_LABELS[state] : "Camera đã tắt"}
             </span>
-            {state === "error" && camera.error && size !== "sm" && (
-              <span className="line-clamp-2 max-w-xs font-mono text-[10px] text-mute">
-                {camera.error}
-              </span>
-            )}
           </div>
         </div>
       )}
 
-      <div className="scanlines pointer-events-none absolute inset-0" />
-
-      {/* ------- top bar ------- */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-2 bg-gradient-to-b from-black/75 to-transparent px-3 pt-2.5 pb-6">
+      {/* ------- tên + trạng thái ------- */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-2 bg-linear-to-b from-black/60 via-black/20 to-transparent px-3.5 pt-3 pb-8">
         <div className="min-w-0">
-          <div className={cn("truncate font-display font-semibold tracking-wide text-white", text.name)}>
-            {camera.name}
+          <div className={cn("flex items-center gap-1.5 truncate font-medium text-white", small ? "text-[12px]" : "text-[14px]")}>
+            {camera.virtual && <Smartphone className="size-3.5 shrink-0 text-white/80" />}
+            <span className="truncate">{camera.name}</span>
           </div>
-          {size !== "sm" && (
-            <div className={cn("mt-0.5 truncate font-mono text-white/55", text.meta)}>
-              {camera.location || camera.id} · <Timecode />
-            </div>
+          {!small && camera.location && (
+            <div className="mt-0.5 truncate text-[11.5px] text-white/60">{camera.location}</div>
           )}
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
           {recording && (
-            <span className={cn("flex items-center gap-1 rounded bg-critical px-1.5 py-0.5 font-mono font-semibold text-white", text.meta)}>
-              <span className="size-1.5 animate-pulse-soft rounded-full bg-white" />
-              REC
+            <span className="flex items-center gap-1 rounded-full bg-critical px-2 py-0.5 text-[10.5px] font-semibold tracking-wide text-white">
+              <span className="size-1.5 animate-breathe rounded-full bg-white" />
+              GHI
             </span>
           )}
           {online && (
-            <span className={cn("flex items-center gap-1 rounded border border-good/40 bg-black/40 px-1.5 py-0.5 font-mono font-semibold text-good", text.meta)}>
-              <span className="size-1.5 animate-pulse-soft rounded-full bg-good" />
-              LIVE
-              {size !== "sm" && live?.fps ? <span className="text-white/50">{live.fps.toFixed(0)}fps</span> : null}
+            <span className="flex items-center gap-1.5 rounded-full bg-black/35 px-2 py-0.5 text-[10.5px] font-medium text-white backdrop-blur-md">
+              <span className="size-1.5 rounded-full bg-[#5ee0a0]" />
+              Trực tiếp
             </span>
           )}
         </div>
       </div>
 
-      {/* ------- alarm banner ------- */}
+      {/* ------- cảnh báo ------- */}
       {alarm && (
-        <div className="pointer-events-none absolute inset-x-0 top-1/2 flex -translate-y-1/2 justify-center">
-          <span className={cn("flex items-center gap-2 rounded bg-critical/90 px-3 py-1.5 font-display font-bold tracking-[0.18em] text-white uppercase shadow-lg shadow-critical/30", size === "sm" ? "text-[10px]" : "text-xs")}>
-            <AlertOctagon className="size-4" />
-            Phát hiện bắt nạt
+        <div className="pointer-events-none absolute inset-x-0 top-1/2 flex -translate-y-1/2 justify-center px-4">
+          <span
+            className={cn(
+              "flex items-center gap-2 rounded-full bg-critical px-4 py-2 font-medium text-white shadow-lift",
+              small ? "text-[11px]" : "text-[13px]",
+            )}
+          >
+            <ShieldAlert className="size-4" />
+            Phát hiện dấu hiệu bắt nạt
           </span>
         </div>
       )}
 
-      {/* ------- AI HUD ------- */}
+      {/* ------- nhận định AI ------- */}
       {hud && online && (
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/50 to-transparent px-3 pt-8 pb-2.5">
-          <div className="flex items-end justify-between gap-3">
-            <div className="min-w-0 flex-1">
-              {camera.ai_enabled ? (
-                <>
-                  <div className={cn("flex items-center gap-1.5 text-white", text.hud)}>
-                    <ScanEye className={cn("size-3.5 shrink-0", alarm ? "text-critical" : "text-signal")} />
-                    <span className="truncate font-medium">{classLabel(analysis?.class)}</span>
-                    {analysis && (
-                      <span className="font-mono text-white/60 tabular">{analysis.confidence.toFixed(0)}%</span>
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 bg-linear-to-t from-black/55 to-transparent px-3.5 pt-10 pb-3">
+          {camera.ai_enabled ? (
+            <div className="min-w-0">
+              <span
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 font-medium backdrop-blur-md",
+                  small ? "text-[10.5px]" : "text-[12px]",
+                  PILL[verdict.tone],
+                )}
+              >
+                <span className={cn("size-1.5 rounded-full", DOT[verdict.tone])} />
+                {verdict.label}
+                {analysis && verdict.level > 0 && <span className="tabular opacity-80">{risk.toFixed(0)}%</span>}
+              </span>
+              {!small && (
+                <div className="mt-2 h-0.75 w-36 overflow-hidden rounded-full bg-white/15">
+                  <div
+                    className={cn(
+                      "h-full rounded-full transition-[width] duration-500",
+                      verdict.level === 2 ? "bg-[#ff8a7a]" : verdict.level === 1 ? "bg-[#ffc37a]" : "bg-white/80",
                     )}
-                  </div>
-                  <div className="mt-1.5 h-[3px] w-full max-w-48 overflow-hidden rounded-full bg-white/10">
-                    <div
-                      className={cn(
-                        "h-full rounded-full transition-[width] duration-300",
-                        risk >= threshold ? "bg-critical" : "bg-warning",
-                      )}
-                      style={{ width: `${risk}%` }}
-                    />
-                  </div>
-                </>
-              ) : (
-                <span className={cn("font-mono text-white/50 uppercase", text.meta)}>AI tắt</span>
+                    style={{ width: `${Math.max(2, risk)}%` }}
+                  />
+                </div>
               )}
             </div>
-            {hasAudio && <VuMeter level={audio} />}
-          </div>
+          ) : (
+            <span className="rounded-full bg-black/35 px-2.5 py-1 text-[11px] text-white/70 backdrop-blur-md">AI đang tắt</span>
+          )}
+          {hasAudio && <VuMeter level={audio} />}
         </div>
       )}
 
       {actions && (
-        <div className="absolute top-12 right-2.5 flex flex-col gap-1.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+        <div className="absolute top-12 right-3 flex flex-col gap-1.5 opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-within:opacity-100">
           {actions}
         </div>
       )}

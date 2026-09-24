@@ -16,9 +16,9 @@ export function MenuContent({
     <DropdownMenu.Portal>
       <DropdownMenu.Content
         align={align}
-        sideOffset={6}
+        sideOffset={8}
         className={cn(
-          "panel z-50 min-w-48 p-1 shadow-xl shadow-black/50 data-[state=open]:animate-[fade-in_0.12s_ease-out]",
+          "z-50 min-w-52 rounded-2xl border border-hairline bg-surface p-1.5 shadow-lift data-[state=open]:animate-[pop_0.16s_ease-out]",
           className,
         )}
         {...props}
@@ -35,11 +35,11 @@ export function MenuItem({
   return (
     <DropdownMenu.Item
       className={cn(
-        "flex cursor-pointer items-center gap-2 rounded px-2.5 py-2 text-[13px] outline-none select-none [&_svg]:size-4",
+        "flex cursor-pointer items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm outline-none select-none [&_svg]:size-4 [&_svg]:shrink-0",
         danger
-          ? "text-critical data-[highlighted]:bg-critical/10"
-          : "text-dim data-[highlighted]:bg-panel-2 data-[highlighted]:text-text",
-        "data-[disabled]:pointer-events-none data-[disabled]:opacity-40",
+          ? "text-critical data-highlighted:bg-critical-soft"
+          : "text-ink-2 data-highlighted:bg-surface-3 data-highlighted:text-ink",
+        "data-disabled:pointer-events-none data-disabled:opacity-40",
         className,
       )}
       {...props}
@@ -47,7 +47,7 @@ export function MenuItem({
   );
 }
 
-export const MenuSeparator = () => <DropdownMenu.Separator className="my-1 h-px bg-line" />;
+export const MenuSeparator = () => <DropdownMenu.Separator className="mx-1.5 my-1 h-px bg-hairline" />;
 
 export const TooltipProvider = TooltipPrimitive.Provider;
 
@@ -66,8 +66,8 @@ export function Tooltip({
       <TooltipPrimitive.Portal>
         <TooltipPrimitive.Content
           side={side}
-          sideOffset={6}
-          className="z-50 max-w-72 rounded border border-line-strong bg-panel-3 px-2.5 py-1.5 text-xs text-text shadow-lg shadow-black/40 data-[state=delayed-open]:animate-[fade-in_0.1s_ease-out]"
+          sideOffset={8}
+          className="z-50 max-w-72 rounded-lg bg-ink px-2.5 py-1.5 text-xs text-white shadow-lift data-[state=delayed-open]:animate-[fade-in_0.12s_ease-out]"
         >
           {content}
         </TooltipPrimitive.Content>

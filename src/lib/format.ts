@@ -4,7 +4,6 @@ const dateTime = new Intl.DateTimeFormat("vi-VN", {
   year: "numeric",
   hour: "2-digit",
   minute: "2-digit",
-  second: "2-digit",
 });
 
 const shortTime = new Intl.DateTimeFormat("vi-VN", {
@@ -12,9 +11,13 @@ const shortTime = new Intl.DateTimeFormat("vi-VN", {
   minute: "2-digit",
 });
 
-const dayMonth = new Intl.DateTimeFormat("vi-VN", {
-  day: "2-digit",
-  month: "2-digit",
+const weekday = new Intl.DateTimeFormat("vi-VN", { weekday: "short" });
+
+const longDate = new Intl.DateTimeFormat("vi-VN", {
+  weekday: "long",
+  day: "numeric",
+  month: "long",
+  year: "numeric",
 });
 
 const compact = new Intl.NumberFormat("vi-VN", {
@@ -31,8 +34,44 @@ export function formatTime(ts: number) {
   return shortTime.format(new Date(ts * 1000));
 }
 
+/** "24/9" (tự định dạng để mọi trình duyệt hiển thị giống nhau) */
+function dayMonthOf(date: Date) {
+  return `${date.getDate()}/${date.getMonth() + 1}`;
+}
+
 export function formatDay(ts: number) {
-  return dayMonth.format(new Date(ts * 1000));
+  return dayMonthOf(new Date(ts * 1000));
+}
+
+export function formatWeekday(ts: number) {
+  return weekday.format(new Date(ts * 1000));
+}
+
+/** "Thứ năm, 24 tháng 9, 2026" */
+export function formatLongDate(date = new Date()) {
+  const text = longDate.format(date);
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+export function greeting(date = new Date()) {
+  const hour = date.getHours();
+  if (hour < 11) return "Chào buổi sáng";
+  if (hour < 14) return "Chào buổi trưa";
+  if (hour < 18) return "Chào buổi chiều";
+  return "Chào buổi tối";
+}
+
+/** Hôm nay 14:32 · Hôm qua 09:10 · 12/09 08:00 */
+export function formatWhen(ts?: number | null) {
+  if (!ts) return "—";
+  const date = new Date(ts * 1000);
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+  const same = (a: Date, b: Date) => a.toDateString() === b.toDateString();
+  if (same(date, today)) return `Hôm nay ${shortTime.format(date)}`;
+  if (same(date, yesterday)) return `Hôm qua ${shortTime.format(date)}`;
+  return `${dayMonthOf(date)} · ${shortTime.format(date)}`;
 }
 
 export function formatRelative(ts?: number | null) {

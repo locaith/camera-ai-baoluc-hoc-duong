@@ -2,6 +2,7 @@ import type {
   AiStatus,
   CameraState,
   EventType,
+  ReviewStatus,
   Role,
   Severity,
   StorageKind,
@@ -10,23 +11,23 @@ import type {
 
 export const ROLE_LABELS: Record<Role, string> = {
   admin: "Quản trị viên",
-  operator: "Vận hành",
-  viewer: "Người xem",
+  operator: "Giáo viên",
+  viewer: "Chỉ xem",
 };
 
 export const ROLE_HINTS: Record<Role, string> = {
-  admin: "Toàn quyền: camera, cài đặt, lưu trữ, người dùng",
-  operator: "Ghi hình, đánh dấu, xử lý cảnh báo, tải video",
-  viewer: "Chỉ xem camera, cảnh báo và video",
+  admin: "Toàn quyền: camera, người dùng, cài đặt và lưu trữ",
+  operator: "Xem, ghi nhận và xử lý sự việc; ghi hình, tải video",
+  viewer: "Xem camera, sự việc, video và quay tại chỗ",
 };
 
 export const CLASS_LABELS: Record<string, string> = {
   possible_bullying: "Nghi bắt nạt",
   "possible-bullying": "Nghi bắt nạt",
   "normal-interaction": "Bình thường",
-  unclear: "Không rõ",
-  Unlabeled: "Chưa gán nhãn",
-  Unknown: "Không xác định",
+  unclear: "Chưa rõ",
+  Unlabeled: "Chưa rõ",
+  Unknown: "Chưa rõ",
 };
 
 export function classLabel(name?: string | null) {
@@ -35,29 +36,39 @@ export function classLabel(name?: string | null) {
 }
 
 export const EVENT_LABELS: Record<EventType, string> = {
-  bullying: "Bắt nạt",
+  bullying: "Nghi bắt nạt",
   toxic_speech: "Lời nói tiêu cực",
-  high_anger: "La hét / căng thẳng",
-  camera_offline: "Mất kết nối",
-  camera_online: "Kết nối lại",
-  manual: "Đánh dấu",
+  high_anger: "La hét, căng thẳng",
+  camera_offline: "Camera mất kết nối",
+  camera_online: "Camera kết nối lại",
+  manual: "Được đánh dấu",
 };
 
-/** Loại sự kiện hiển thị trên biểu đồ (màu categorical đã kiểm định). */
-export const CHART_EVENT_TYPES = [
-  { key: "bullying", label: "Bắt nạt", color: "var(--series-bullying)" },
-  { key: "toxic_speech", label: "Lời nói tiêu cực", color: "var(--series-toxic)" },
-  { key: "high_anger", label: "La hét / căng thẳng", color: "var(--series-anger)" },
-] as const;
+/** Các loại "sự việc" cần nhà trường xem xét (khác thông báo kỹ thuật). */
+export const INCIDENT_TYPES: EventType[] = ["bullying", "toxic_speech", "high_anger", "manual"];
+
+export const REVIEW_LABELS: Record<ReviewStatus, string> = {
+  new: "Cần xem",
+  confirmed: "Đã xác nhận",
+  false_alarm: "Báo nhầm",
+  resolved: "Đã xử lý",
+};
+
+export const REVIEW_HINTS: Record<ReviewStatus, string> = {
+  new: "Chưa có ai xem",
+  confirmed: "Có sự việc thật, đang theo dõi",
+  false_alarm: "AI nhận định chưa đúng",
+  resolved: "Đã xử lý xong",
+};
 
 export const SEVERITY_LABELS: Record<Severity, string> = {
-  critical: "Nghiêm trọng",
-  warning: "Cảnh báo",
+  critical: "Mức độ cao",
+  warning: "Mức độ vừa",
   info: "Thông tin",
 };
 
 export const STATE_LABELS: Record<CameraState, string> = {
-  online: "Trực tuyến",
+  online: "Đang hoạt động",
   connecting: "Đang kết nối",
   error: "Mất tín hiệu",
   offline: "Đã tắt",
@@ -66,25 +77,26 @@ export const STATE_LABELS: Record<CameraState, string> = {
 export const SOURCE_LABELS: Record<VideoSource, string> = {
   upload: "Tải lên",
   recording: "Ghi thủ công",
-  event: "Clip sự kiện",
+  event: "Clip sự việc",
+  phone: "Quay tại chỗ",
 };
 
 export const AI_STATUS_LABELS: Record<AiStatus, string> = {
   pending: "Chờ phân tích",
   processing: "Đang phân tích",
   done: "Đã phân tích",
-  failed: "Lỗi phân tích",
+  failed: "Không phân tích được",
   recording: "Đang ghi",
 };
 
 export const STORAGE_LABELS: Record<StorageKind, string> = {
-  local: "Local",
-  uploading: "Đang đẩy R2",
-  r2: "Cloudflare R2",
+  local: "Máy chủ trường",
+  uploading: "Đang chuyển lên đám mây",
+  r2: "Lưu trữ đám mây",
 };
 
 export const OFFLOAD_REASONS: Record<string, string> = {
   manual: "thủ công",
-  age: "quá hạn lưu local",
-  capacity: "vượt dung lượng",
+  age: "đủ thời gian lưu",
+  capacity: "bộ nhớ đầy",
 };

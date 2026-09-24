@@ -67,12 +67,12 @@ export function GoogleButton({
     target.innerHTML = "";
     google.accounts.id.renderButton(target, {
       type: "standard",
-      theme: "filled_black",
+      theme: "outline",
       size: "large",
       text: "continue_with",
-      shape: "rectangular",
-      logo_alignment: "left",
-      width: 320,
+      shape: "pill",
+      logo_alignment: "center",
+      width: Math.min(360, Math.max(240, target.parentElement?.clientWidth ?? 320)),
       locale: "vi",
     });
   }, [ready, clientId]);
@@ -85,9 +85,9 @@ export function GoogleButton({
         onLoad={() => setReady(true)}
         onReady={() => setReady(true)}
       />
-      <div className="flex min-h-11 justify-center">
+      <div className="flex min-h-11 w-full justify-center">
         <div ref={ref} />
-        {!ready && <div className="h-11 w-[320px] animate-pulse rounded bg-panel-3" aria-label="Đang tải đăng nhập Google" />}
+        {!ready && <div className="skeleton h-11 w-full max-w-90 rounded-full" aria-label="Đang tải đăng nhập Google" />}
       </div>
     </>
   );

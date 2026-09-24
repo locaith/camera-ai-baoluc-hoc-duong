@@ -3,148 +3,89 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import {
-  ArrowRight,
-  Clock3,
-  Cloud,
-  KeyRound,
-  LoaderCircle,
-  Lock,
-  RefreshCw,
-  Server,
-  ShieldAlert,
-  Siren,
-  TriangleAlert,
-} from "lucide-react";
+import { ArrowRight, Clock3, LoaderCircle, Lock, RefreshCw } from "lucide-react";
 
 import { GoogleButton, disableGoogleAutoSelect } from "@/components/auth/google-button";
 import { Logo, LogoMark } from "@/components/shell/logo";
+import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { Notice } from "@/components/ui/feedback";
 import { Input } from "@/components/ui/form";
 import { api } from "@/lib/api";
-import { DEFAULT_API_URL, isMixedContent, useConnection, useIsClient } from "@/lib/connection";
-import { hostOf } from "@/lib/format";
+import { useConnection, useIsClient } from "@/lib/connection";
 import { useHealth } from "@/lib/hooks";
 import type { GoogleLoginResult, SessionUser } from "@/lib/types";
 
-const FEATURES = [
-  {
-    icon: ShieldAlert,
-    title: "AI phân tích liên tục",
-    text: "Nhận diện dấu hiệu bắt nạt trên mọi camera ngay tại máy chủ của trường.",
-  },
-  {
-    icon: Siren,
-    title: "Cảnh báo tức thời",
-    text: "Ảnh chụp + clip trước/sau sự kiện, đẩy về web theo thời gian thực.",
-  },
-  {
-    icon: Cloud,
-    title: "Local trước, R2 sau",
-    text: "Video lưu tạm tại máy để AI xử lý, tự đẩy lên Cloudflare R2 khi đầy.",
-  },
+const PILLARS = [
+  { no: "01", title: "Quan sát liên tục", text: "AI theo dõi hành lang, sân trường, cầu thang — cả ngày, không mệt mỏi." },
+  { no: "02", title: "Báo ngay cho thầy cô", text: "Dấu hiệu bắt nạt được gửi tới điện thoại kèm ảnh và đoạn video." },
+  { no: "03", title: "Lưu giữ bằng chứng", text: "Mọi sự việc có hồ sơ rõ ràng để nhà trường xử lý đúng mực." },
 ];
 
-function Viewfinder() {
+function BrandPanel({ school }: { school?: string }) {
   return (
-    <div
-      className="brackets relative aspect-video w-full overflow-hidden rounded-lg border border-line bg-[#06080d]"
-      style={{ "--bracket": "var(--signal)" } as React.CSSProperties}
-    >
-      <div className="scanlines absolute inset-0" />
+    <section className="grain relative hidden h-dvh overflow-hidden bg-[#0f1f5c] text-white lg:sticky lg:top-0 lg:flex lg:flex-col lg:justify-between lg:p-12 xl:p-16">
+      {/* ánh sáng + vòng tròn đồng tâm rất mờ */}
       <div
-        className="absolute inset-0 opacity-70"
+        aria-hidden
+        className="pointer-events-none absolute inset-0"
         style={{
-          backgroundImage:
-            "linear-gradient(rgba(91,130,255,0.07) 1px, transparent 1px), linear-gradient(90deg, rgba(91,130,255,0.07) 1px, transparent 1px)",
-          backgroundSize: "40px 40px",
+          background:
+            "radial-gradient(900px 600px at 85% 110%, rgba(64,110,255,0.45), transparent 60%), radial-gradient(700px 500px at -10% -10%, rgba(29,63,184,0.9), transparent 60%)",
         }}
       />
-      <div className="absolute inset-x-0 h-1/3 animate-sweep bg-gradient-to-b from-transparent via-signal/10 to-transparent" />
-      <div className="absolute top-[30%] left-[16%] h-[46%] w-[20%] rounded-sm border border-good/70">
-        <span className="absolute -top-5 left-0 font-mono text-[10px] text-good">BÌNH THƯỜNG 96%</span>
+      <svg aria-hidden className="pointer-events-none absolute -right-40 -bottom-40 size-[720px] opacity-[0.09]" viewBox="0 0 100 100">
+        {[48, 40, 32, 24, 16].map((r) => (
+          <circle key={r} cx="50" cy="50" r={r} fill="none" stroke="white" strokeWidth="0.18" />
+        ))}
+      </svg>
+
+      <div className="relative animate-rise">
+        <Logo white subtitle={school} size={44} />
       </div>
-      <div className="alarm absolute top-[24%] left-[52%] h-[52%] w-[26%] rounded-sm">
-        <span className="absolute -top-5 left-0 font-mono text-[10px] text-critical">NGHI BẮT NẠT 91%</span>
+
+      <div className="relative max-w-xl animate-rise [animation-delay:120ms]">
+        <div className="mb-6 flex items-center gap-3 text-[11px] font-medium tracking-[0.2em] text-[#d9c49b] uppercase">
+          <span className="h-px w-8 bg-[#d9c49b]/70" /> Dành cho nhà trường
+        </div>
+        <h1 className="display text-[46px] leading-[1.06] xl:text-[56px]">
+          An toàn của học sinh,
+          <br />
+          <span className="italic text-[#c9d6ff]">được nhìn thấy sớm hơn.</span>
+        </h1>
+        <p className="mt-6 max-w-md text-[15.5px] leading-relaxed text-white/70">
+          Camera AI lặng lẽ quan sát các khu vực chung, nhận ra dấu hiệu bắt nạt và báo ngay cho thầy cô — để mỗi
+          sự việc được xử lý kịp thời, tế nhị và đúng mực.
+        </p>
       </div>
-      <div className="absolute top-3 left-3 font-mono text-[10px] text-white/60">CAM-02 · HÀNH LANG TẦNG 2</div>
-      <div className="absolute top-3 right-3 flex items-center gap-1.5 font-mono text-[10px] text-good">
-        <span className="size-1.5 animate-pulse-soft rounded-full bg-good" /> LIVE
-      </div>
-      <div className="absolute right-3 bottom-3 left-3 flex items-end justify-between font-mono text-[10px] text-white/50">
-        <span>AI · MOBILENETV2 · 224×224</span>
-        <span className="text-critical">REC ●</span>
-      </div>
-    </div>
+
+      <ul className="relative grid grid-cols-3 gap-8 border-t border-white/12 pt-8">
+        {PILLARS.map((item, i) => (
+          <li key={item.no} className="animate-rise" style={{ animationDelay: `${240 + i * 90}ms` }}>
+            <div className="numeral text-[15px] text-[#d9c49b]">{item.no}</div>
+            <div className="mt-2 text-[14px] font-medium">{item.title}</div>
+            <p className="mt-1.5 text-[12.5px] leading-relaxed text-white/55">{item.text}</p>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
-function ServerSwitcher() {
-  const baseUrl = useConnection((s) => s.baseUrl);
-  const setBaseUrl = useConnection((s) => s.setBaseUrl);
-  const [editing, setEditing] = useState(false);
-  const [value, setValue] = useState(baseUrl);
-
-  if (!editing) {
-    return (
-      <div className="flex items-center justify-center gap-2 font-mono text-[11px] text-mute">
-        <Server className="size-3.5" />
-        Máy chủ AI: <span className="text-dim">{hostOf(baseUrl)}</span>
-        <button
-          type="button"
-          className="text-signal hover:underline"
-          onClick={() => {
-            setValue(baseUrl);
-            setEditing(true);
-          }}
-        >
-          Đổi
-        </button>
-      </div>
-    );
-  }
-
+function MobileBrand({ school }: { school?: string }) {
   return (
-    <form
-      className="flex gap-2"
-      onSubmit={(e) => {
-        e.preventDefault();
-        setBaseUrl(value);
-        setEditing(false);
-      }}
-    >
-      <Input
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        placeholder={DEFAULT_API_URL}
-        className="font-mono text-[13px]"
-        autoFocus
+    <div className="grain relative overflow-hidden rounded-b-[32px] bg-[#0f1f5c] px-6 pt-10 pb-12 text-white lg:hidden">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0"
+        style={{ background: "radial-gradient(500px 300px at 100% 120%, rgba(64,110,255,0.5), transparent 60%)" }}
       />
-      <Button type="submit" size="md">
-        Lưu
-      </Button>
-    </form>
-  );
-}
-
-function Notice({
-  tone,
-  icon: Icon,
-  children,
-}: {
-  tone: "warning" | "critical" | "info";
-  icon: typeof TriangleAlert;
-  children: React.ReactNode;
-}) {
-  const styles = {
-    warning: "border-warning/30 bg-warning/5 text-warning",
-    critical: "border-critical/30 bg-critical/5 text-critical",
-    info: "border-signal/30 bg-signal/5 text-signal",
-  }[tone];
-  return (
-    <div className={`flex gap-2.5 rounded-md border p-3 text-xs leading-relaxed ${styles}`}>
-      <Icon className="mt-px size-4 shrink-0" />
-      <div>{children}</div>
+      <div className="relative">
+        <Logo white subtitle={school} size={40} />
+        <h1 className="display mt-8 text-[32px] leading-[1.1]">
+          An toàn của học sinh, <span className="italic text-[#c9d6ff]">được nhìn thấy sớm hơn.</span>
+        </h1>
+      </div>
     </div>
   );
 }
@@ -152,31 +93,24 @@ function Notice({
 function Waiting({ user, onReset }: { user: SessionUser; onReset: () => void }) {
   const pending = user.status === "pending";
   return (
-    <div className="space-y-5 text-center">
-      <div className="mx-auto grid size-16 place-items-center overflow-hidden rounded-full border border-line-strong bg-panel-3">
-        {user.picture ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={user.picture} alt="" referrerPolicy="no-referrer" className="size-full object-cover" />
-        ) : (
-          <span className="font-display text-xl">{user.name.slice(0, 1).toUpperCase()}</span>
-        )}
-      </div>
+    <div className="space-y-6 text-center">
+      <Avatar user={user} size={64} className="mx-auto" />
       <div>
-        <div className="font-semibold text-text">{user.name}</div>
-        <div className="font-mono text-xs text-dim">{user.email}</div>
+        <div className="font-serif text-[22px] text-ink">{user.name}</div>
+        <div className="mt-1 text-sm text-ink-3">{user.email}</div>
       </div>
       {pending ? (
-        <Notice tone="warning" icon={Clock3}>
-          Đã tạo tài khoản. Quản trị viên cần <b>duyệt</b> trước khi bạn xem được camera — hãy báo cho quản trị viên
-          của trường, sau đó đăng nhập lại.
+        <Notice tone="warning" icon={Clock3} title="Đang chờ nhà trường duyệt" className="text-left">
+          Tài khoản của thầy cô đã được ghi nhận. Quản trị viên sẽ duyệt và phân quyền; sau đó thầy cô chỉ cần đăng
+          nhập lại.
         </Notice>
       ) : (
-        <Notice tone="critical" icon={Lock}>
-          Tài khoản này đã bị khoá. Liên hệ quản trị viên nếu bạn cho rằng đây là nhầm lẫn.
+        <Notice tone="critical" icon={Lock} title="Tài khoản đang tạm khoá" className="text-left">
+          Vui lòng liên hệ quản trị viên của trường nếu thầy cô cho rằng đây là nhầm lẫn.
         </Notice>
       )}
       <Button variant="secondary" className="w-full" onClick={onReset}>
-        Đăng nhập bằng tài khoản khác
+        Dùng tài khoản Google khác
       </Button>
     </div>
   );
@@ -185,21 +119,30 @@ function Waiting({ user, onReset }: { user: SessionUser; onReset: () => void }) 
 export function LoginView() {
   const router = useRouter();
   const isClient = useIsClient();
-  const baseUrl = useConnection((s) => s.baseUrl);
   const token = useConnection((s) => s.token);
   const user = useConnection((s) => s.user);
   const setSession = useConnection((s) => s.setSession);
-  const { data: health, error, isLoading, mutate } = useHealth();
+  const setApiOverride = useConnection((s) => s.setApiOverride);
+  const baseUrl = useConnection((s) => s.baseUrl);
+  const { data: health, error, isLoading, isValidating, mutate } = useHealth();
   const [waiting, setWaiting] = useState<SessionUser | null>(null);
   const [busy, setBusy] = useState(false);
-  const [apiToken, setApiToken] = useState("");
+  const [accessCode, setAccessCode] = useState("");
   const [failure, setFailure] = useState("");
 
   const mode = health?.auth.mode;
   const clientId = health?.auth.google_client_id || process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "";
-  const mixed = isClient && isMixedContent(baseUrl);
+  const school = health?.school_name || undefined;
 
-  // Đã đăng nhập (hoặc máy chủ ở chế độ nội bộ) -> vào thẳng hệ thống
+  // Thử nghiệm: /login?api=https://... (hoặc ?api=default để về máy chủ mặc định)
+  useEffect(() => {
+    const override = new URLSearchParams(window.location.search).get("api");
+    if (override === null) return;
+    setApiOverride(override === "default" ? "" : override);
+    router.replace("/login");
+  }, [router, setApiOverride]);
+
+  // Đã đăng nhập (hoặc đang dùng trực tiếp trên máy chủ) -> vào thẳng hệ thống
   useEffect(() => {
     if (user && (token || mode === "none")) router.replace("/");
   }, [user, token, mode, router]);
@@ -207,7 +150,7 @@ export function LoginView() {
   async function finish(sessionToken: string) {
     const me = await api<SessionUser>("/api/auth/me", { token: sessionToken });
     setSession(sessionToken, me);
-    toast.success(`Xin chào, ${me.name || "bạn"}!`);
+    toast.success(`Chào mừng, ${me.name || "thầy cô"}`);
     router.replace("/");
   }
 
@@ -233,14 +176,14 @@ export function LoginView() {
     }
   }
 
-  async function withToken(e: React.FormEvent) {
+  async function withCode(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
     setFailure("");
     try {
-      await finish(apiToken.trim());
+      await finish(accessCode.trim());
     } catch {
-      setFailure("API token không đúng.");
+      setFailure("Mã truy cập không đúng.");
     } finally {
       setBusy(false);
     }
@@ -248,6 +191,7 @@ export function LoginView() {
 
   async function enterLocal() {
     setBusy(true);
+    setFailure("");
     try {
       await finish("");
     } catch (e) {
@@ -261,62 +205,82 @@ export function LoginView() {
 
   if (!isClient || (isLoading && !health)) {
     body = (
-      <div className="flex items-center justify-center gap-2 py-10 text-sm text-dim">
-        <LoaderCircle className="size-4 animate-spin" /> Đang kết nối máy chủ AI…
+      <div className="space-y-4 py-2">
+        <div className="skeleton mx-auto h-11 w-full max-w-90 rounded-full" />
+        <p className="flex items-center justify-center gap-2 text-[13px] text-ink-3">
+          <LoaderCircle className="size-3.5 animate-spin" /> Đang kết nối hệ thống…
+        </p>
       </div>
     );
   } else if (error && !health) {
     body = (
-      <div className="space-y-4">
-        <Notice tone="critical" icon={TriangleAlert}>
-          Không kết nối được máy chủ AI tại <span className="font-mono">{hostOf(baseUrl)}</span>. Hãy chắc chắn backend
-          đang chạy (START.bat) và địa chỉ máy chủ đúng.
+      <div className="space-y-5">
+        <Notice tone="warning" title="Hệ thống đang tạm gián đoạn">
+          Máy chủ camera của trường chưa phản hồi. Thầy cô vui lòng thử lại sau ít phút.
         </Notice>
-        {mixed && (
-          <Notice tone="warning" icon={TriangleAlert}>
-            Trang đang chạy HTTPS nên trình duyệt chặn máy chủ HTTP ngoài localhost — cần địa chỉ HTTPS (Cloudflare
-            Tunnel).
-          </Notice>
-        )}
-        <Button variant="secondary" className="w-full" onClick={() => mutate()}>
-          <RefreshCw /> Thử lại
+        <Button variant="secondary" className="w-full" onClick={() => mutate()} loading={isValidating}>
+          {!isValidating && <RefreshCw />} Thử lại
         </Button>
       </div>
     );
   } else if (waiting) {
     body = <Waiting user={waiting} onReset={() => setWaiting(null)} />;
+  } else if (health?.setup_required) {
+    body = health.local ? (
+      <div className="space-y-5">
+        <Notice tone="info" title="Đang dùng trực tiếp trên máy chủ">
+          Đăng nhập Google chưa được bật. Thầy cô có thể vào hệ thống ngay trên máy này, và nên hoàn tất cài đặt để
+          giáo viên đăng nhập từ xa.
+        </Notice>
+        <Button variant="primary" size="lg" className="w-full" onClick={enterLocal} loading={busy}>
+          Vào hệ thống {!busy && <ArrowRight />}
+        </Button>
+        <Button variant="link" className="mx-auto flex" asChild>
+          <a href={`${baseUrl}/setup`} target="_blank" rel="noreferrer">
+            Hoàn tất cài đặt đăng nhập Google
+          </a>
+        </Button>
+      </div>
+    ) : (
+      <div className="space-y-4">
+        <Notice tone="info" icon={Clock3} title="Nhà trường đang hoàn tất cài đặt">
+          Hệ thống sắp sẵn sàng. Thầy cô vui lòng quay lại sau ít phút.
+        </Notice>
+        <details className="group rounded-2xl border border-hairline px-4 py-3 text-[13px] text-ink-2">
+          <summary className="cursor-pointer list-none font-medium text-ink marker:hidden">
+            Dành cho quản trị viên
+          </summary>
+          <p className="mt-2 leading-relaxed">
+            Trang cài đặt ban đầu tự mở trên máy chủ của trường khi hệ thống khởi động (hoặc mở{" "}
+            <span className="font-medium text-ink">127.0.0.1:8100/setup</span> ngay trên máy chủ). Điền mã đăng nhập
+            Google, email quản trị viên rồi bấm Lưu.
+          </p>
+        </details>
+      </div>
+    );
   } else if (mode === "google") {
     body = (
       <div className="space-y-5">
-        {clientId ? (
+        {clientId && (
           <div className={busy ? "pointer-events-none opacity-60" : undefined}>
             <GoogleButton clientId={clientId} onCredential={withGoogle} />
           </div>
-        ) : null}
-        {busy && (
-          <div className="flex items-center justify-center gap-2 text-xs text-dim">
-            <LoaderCircle className="size-3.5 animate-spin" /> Đang xác minh tài khoản Google…
-          </div>
         )}
-        <p className="text-center text-xs leading-relaxed text-mute">
-          Lần đầu đăng nhập sẽ tự <b className="text-dim">đăng ký</b> tài khoản bằng Google. Quản trị viên duyệt và phân
-          quyền trước khi bạn xem camera.
-        </p>
+        {busy && (
+          <p className="flex items-center justify-center gap-2 text-[13px] text-ink-3">
+            <LoaderCircle className="size-3.5 animate-spin" /> Đang xác minh tài khoản…
+          </p>
+        )}
       </div>
     );
-  } else if (mode === "token") {
+  } else {
     body = (
-      <form onSubmit={withToken} className="space-y-4">
-        <Notice tone="info" icon={KeyRound}>
-          Máy chủ chưa bật đăng nhập Google, đang dùng API token dành cho quản trị. Thêm{" "}
-          <span className="font-mono">GOOGLE_CLIENT_ID</span> vào .env để bật đăng nhập Google.
-        </Notice>
+      <form onSubmit={withCode} className="space-y-4">
         <Input
           type="password"
-          value={apiToken}
-          onChange={(e) => setApiToken(e.target.value)}
-          placeholder="API token"
-          className="font-mono"
+          value={accessCode}
+          onChange={(e) => setAccessCode(e.target.value)}
+          placeholder="Mã truy cập quản trị"
           autoComplete="current-password"
           required
         />
@@ -325,71 +289,37 @@ export function LoginView() {
         </Button>
       </form>
     );
-  } else {
-    body = (
-      <div className="space-y-4">
-        <Notice tone="warning" icon={TriangleAlert}>
-          Máy chủ đang ở <b>chế độ nội bộ</b> (chưa bật đăng nhập Google) — ai truy cập được máy chủ cũng dùng được.
-          Thêm <span className="font-mono">GOOGLE_CLIENT_ID</span> vào file .env để bắt buộc đăng nhập Google.
-        </Notice>
-        <Button variant="primary" size="lg" className="w-full" onClick={enterLocal} loading={busy}>
-          Vào hệ thống {!busy && <ArrowRight />}
-        </Button>
-      </div>
-    );
   }
 
   return (
-    <div className="grid min-h-screen lg:grid-cols-[1.1fr_1fr]">
-      <section className="sticky top-0 hidden h-screen flex-col justify-between gap-8 overflow-y-auto border-r border-line p-10 lg:flex xl:px-14">
-        <Logo />
-        <div className="max-w-xl">
-          <div className="eyebrow mb-4 text-signal">Hệ thống giám sát bằng AI</div>
-          <h1 className="font-display text-[38px] leading-[1.08] font-bold tracking-tight xl:text-[44px]">
-            Mọi camera.
-            <br />
-            Một trung tâm
-            <span className="text-signal"> cảnh giác</span>.
-          </h1>
-          <p className="mt-4 max-w-md text-[15px] leading-relaxed text-dim">
-            Kết nối camera IP qua RTSP/ONVIF, để AI nhận diện dấu hiệu bắt nạt từ hình ảnh và âm thanh, lưu bằng chứng
-            và cảnh báo ngay lập tức cho giáo viên, bảo vệ.
+    <div className="min-h-dvh lg:grid lg:grid-cols-[1.08fr_1fr]">
+      <BrandPanel school={school} />
+      <MobileBrand school={school} />
+
+      <section className="flex items-start justify-center px-6 pt-10 pb-16 lg:min-h-dvh lg:items-center lg:py-16">
+        <div className="w-full max-w-100 animate-rise [animation-delay:80ms]">
+          <div className="hidden lg:block">
+            <LogoMark size={52} priority />
+          </div>
+          <div className="eyebrow mt-0 lg:mt-10">{school || "Camera AI"}</div>
+          <h2 className="display mt-3 text-[38px] leading-tight text-ink">Đăng nhập</h2>
+          <p className="mt-3 text-[15px] leading-relaxed text-ink-2">
+            Dùng tài khoản Google của thầy cô để tiếp tục. Lần đầu đăng nhập sẽ tự tạo tài khoản và chờ nhà trường
+            duyệt.
           </p>
-          <div className="mt-7 max-w-lg">
-            <Viewfinder />
-          </div>
-        </div>
-        <ul className="grid grid-cols-3 gap-5">
-          {FEATURES.map(({ icon: Icon, title, text }, i) => (
-            <li key={title} className="animate-rise" style={{ animationDelay: `${150 + i * 90}ms` }}>
-              <Icon className="size-5 text-signal" />
-              <div className="mt-2.5 text-sm font-semibold">{title}</div>
-              <p className="mt-1 text-xs leading-relaxed text-mute">{text}</p>
-            </li>
-          ))}
-        </ul>
-      </section>
 
-      <section className="flex items-center justify-center p-6">
-        <div className="w-full max-w-sm">
-          <div className="mb-8 flex flex-col items-center text-center">
-            <LogoMark size={88} className="drop-shadow-[0_12px_40px_rgba(41,87,245,0.35)]" />
-            <h2 className="mt-5 font-display text-2xl font-semibold tracking-wide">Đăng nhập Camera AI</h2>
-            <p className="mt-2 text-sm text-dim">Dùng tài khoản Google để đăng ký hoặc đăng nhập.</p>
-          </div>
-
-          <div className="panel brackets space-y-4 p-6">
+          <div className="card mt-8 space-y-4 p-6">
             {body}
             {failure && (
-              <Notice tone="critical" icon={TriangleAlert}>
+              <Notice tone="critical" title="Chưa đăng nhập được">
                 {failure}
               </Notice>
             )}
           </div>
 
-          <div className="mt-6">
-            <ServerSwitcher />
-          </div>
+          <p className="mt-8 text-center text-xs leading-relaxed text-ink-3">
+            Hình ảnh và video được lưu trữ riêng cho nhà trường, chỉ dùng để bảo vệ học sinh.
+          </p>
         </div>
       </section>
     </div>

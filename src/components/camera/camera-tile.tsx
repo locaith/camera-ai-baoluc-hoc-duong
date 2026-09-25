@@ -1,6 +1,6 @@
 "use client";
 
-import { ShieldAlert, Smartphone, VideoOff, WifiOff } from "lucide-react";
+import { ShieldAlert, Smartphone, VideoOff, Webcam, WifiOff } from "lucide-react";
 
 import { STATE_LABELS } from "@/lib/labels";
 import { useLiveFrame, useLiveStatus, useLiveThreshold } from "@/lib/live";
@@ -108,6 +108,7 @@ export function CameraTile({
         <div className="min-w-0">
           <div className={cn("flex items-center gap-1.5 truncate font-medium text-white", small ? "text-[12px]" : "text-[14px]")}>
             {camera.virtual && <Smartphone className="size-3.5 shrink-0 text-white/80" />}
+            {camera.source === "webcam" && <Webcam className="size-3.5 shrink-0 text-white/80" />}
             <span className="truncate">{camera.name}</span>
           </div>
           {!small && camera.location && (

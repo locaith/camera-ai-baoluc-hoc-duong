@@ -71,6 +71,7 @@ export function RangeField({
   step = 1,
   unit = "",
   onChange,
+  onCommit,
 }: {
   label: string;
   hint?: string;
@@ -80,6 +81,8 @@ export function RangeField({
   step?: number;
   unit?: string;
   onChange: (value: number) => void;
+  /** Gọi khi thả thanh trượt (để tự lưu) */
+  onCommit?: (value: number) => void;
 }) {
   const id = useId();
   return (
@@ -100,6 +103,7 @@ export function RangeField({
         max={max}
         step={step}
         onValueChange={([v]) => onChange(v)}
+        onValueCommit={([v]) => onCommit?.(v)}
         className="relative flex h-5 w-full touch-none items-center select-none"
       >
         <SliderPrimitive.Track className="relative h-1 grow overflow-hidden rounded-full bg-surface-3">

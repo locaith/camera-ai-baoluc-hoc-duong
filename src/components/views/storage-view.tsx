@@ -13,6 +13,7 @@ import { Meter, Skeleton, severityTone } from "@/components/ui/feedback";
 import { Field, Input, Segmented } from "@/components/ui/form";
 import { SwitchRow } from "@/components/ui/switch";
 import { api, query } from "@/lib/api";
+import { SaveStatus, useSettingsAutosave } from "@/lib/autosave";
 import { useRole } from "@/lib/connection";
 import { formatBytes, formatRelative, formatWhen } from "@/lib/format";
 import { revalidate, useStorage, useVideos } from "@/lib/hooks";
@@ -75,25 +76,14 @@ function PolicyCard({ storage }: { storage: StorageSummary }) {
   const [auto, setAuto] = useState(storage.policy.auto_offload);
   const [maxGb, setMaxGb] = useState(String(storage.policy.local_storage_max_gb));
   const [hours, setHours] = useState(String(storage.policy.offload_after_hours));
-  const [saving, setSaving] = useState(false);
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<OffloadResult | null>(storage.policy.last_result);
+  const { state, save, flush } = useSettingsAutosave();
 
-  async function save() {
-    setSaving(true);
-    try {
-      await api("/api/settings", {
-        method: "PUT",
-        json: { auto_offload: auto, local_storage_max_gb: Number(maxGb), offload_after_hours: Number(hours) },
-      });
-      toast.success("Đã lưu chính sách lưu trữ");
-      revalidate("/api/storage");
-      revalidate("/api/settings");
-    } catch (e) {
-      toast.error("Chưa lưu được", { description: (e as Error).message });
-    } finally {
-      setSaving(false);
-    }
+  /** Ô số: chỉ lưu giá trị hợp lệ, sau khi ngừng gõ */
+  function saveNumber(key: "local_storage_max_gb" | "offload_after_hours", text: string, min: number) {
+    const value = Number(text);
+    if (text.trim() !== "" && Number.isFinite(value) && value >= min) save({ [key]: value }, 900);
   }
 
   async function runNow(force: boolean) {
@@ -117,26 +107,46 @@ function PolicyCard({ storage }: { storage: StorageSummary }) {
 
   return (
     <Card>
-      <CardHeader eyebrow="Tự động" title="Chính sách chuyển video" />
+      <CardHeader eyebrow="Tự động" title="Chính sách chuyển video" action={isAdmin ? <SaveStatus state={state} /> : undefined} />
       <fieldset disabled={!isAdmin} className="mt-5 space-y-4 disabled:opacity-60">
         <SwitchRow
           label="Tự chuyển video lên đám mây"
           hint={`Kiểm tra mỗi ${storage.policy.interval_minutes} phút và sau mỗi video AI xem xong`}
           checked={auto}
-          onCheckedChange={setAuto}
+          onCheckedChange={(value) => {
+            setAuto(value);
+            save({ auto_offload: value });
+          }}
         />
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Giới hạn bộ nhớ trên máy chủ (GB)" hint="Vượt giới hạn → chuyển video cũ nhất tới khi còn 80%">
-            <Input type="number" min={0.1} step={0.5} value={maxGb} onChange={(e) => setMaxGb(e.target.value)} />
+            <Input
+              type="number"
+              min={0.1}
+              step={0.5}
+              value={maxGb}
+              onChange={(e) => {
+                setMaxGb(e.target.value);
+                saveNumber("local_storage_max_gb", e.target.value, 0.1);
+              }}
+              onBlur={() => void flush()}
+            />
           </Field>
           <Field label="Chuyển video cũ hơn (giờ)" hint="0 = chỉ chuyển khi bộ nhớ đầy">
-            <Input type="number" min={0} step={1} value={hours} onChange={(e) => setHours(e.target.value)} />
+            <Input
+              type="number"
+              min={0}
+              step={1}
+              value={hours}
+              onChange={(e) => {
+                setHours(e.target.value);
+                saveNumber("offload_after_hours", e.target.value, 0);
+              }}
+              onBlur={() => void flush()}
+            />
           </Field>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="primary" onClick={save} loading={saving}>
-            Lưu chính sách
-          </Button>
           <Button onClick={() => runNow(false)} loading={running} disabled={!storage.r2.enabled}>
             Chạy ngay
           </Button>
@@ -330,7 +340,7 @@ export function StorageView() {
           </div>
         </Card>
         <CloudCard storage={storage} />
-        <PolicyCard key={`${storage.policy.local_storage_max_gb}-${storage.policy.offload_after_hours}-${storage.policy.auto_offload}`} storage={storage} />
+        <PolicyCard storage={storage} />
       </div>
 
       <Card padded={false} className="overflow-hidden">

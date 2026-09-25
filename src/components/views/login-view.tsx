@@ -352,8 +352,9 @@ export function LoginView() {
           <div className="eyebrow mt-0 lg:mt-10">{school || "Camera AI"}</div>
           <h2 className="display mt-3 text-[38px] leading-tight text-ink">Đăng nhập</h2>
           <p className="mt-3 text-[15px] leading-relaxed text-ink-2">
-            Dùng tài khoản Google của thầy cô để tiếp tục. Lần đầu đăng nhập sẽ tự tạo tài khoản và chờ nhà trường
-            duyệt.
+            {health?.open_signup
+              ? "Dùng tài khoản Google của thầy cô để tiếp tục. Lần đầu đăng nhập sẽ tự tạo tài khoản và dùng được ngay."
+              : "Dùng tài khoản Google của thầy cô để tiếp tục. Lần đầu đăng nhập sẽ tự tạo tài khoản và chờ nhà trường duyệt."}
           </p>
 
           <div className="card mt-8 space-y-4 p-6">

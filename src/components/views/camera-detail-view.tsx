@@ -19,7 +19,7 @@ import {
 
 import { useCameraActions } from "@/components/camera/camera-actions";
 import { aiVerdict, CameraStateBadge, riskOf } from "@/components/camera/camera-bits";
-import { EditCameraDialog } from "@/components/camera/camera-dialogs";
+import { EditCameraDialog, maskSecrets, webcamLabel } from "@/components/camera/camera-dialogs";
 import { CameraTile } from "@/components/camera/camera-tile";
 import { RiskChart } from "@/components/charts/risk-chart";
 import { EventRow } from "@/components/events/event-bits";
@@ -232,7 +232,12 @@ export function CameraDetailView({ id }: { id: string }) {
                 label="Lưu clip khi có sự việc"
                 value={camera.record_on_event ? `Bật · ${settings?.pre_roll_seconds ?? 5}s trước, ${settings?.post_roll_seconds ?? 10}s sau` : "Tắt"}
               />
-              {isAdmin && !camera.virtual && <InfoRow label="Luồng video" value={<span className="font-mono text-xs">{camera.rtsp_url}</span>} />}
+              {camera.source === "webcam" ? (
+                <InfoRow label="Webcam" value={webcamLabel(camera.rtsp_url)} />
+              ) : (
+                isAdmin &&
+                !camera.virtual && <InfoRow label="Luồng video" value={<span className="font-mono text-xs">{maskSecrets(camera.rtsp_url)}</span>} />
+              )}
             </div>
             {camera.error && camera.state === "error" && (
               <p className="mt-3 rounded-2xl bg-critical-soft px-4 py-3 text-[13px] leading-relaxed text-critical">

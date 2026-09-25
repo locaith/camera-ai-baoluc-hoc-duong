@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { Lock, LogOut, Megaphone, RotateCcw, Save, Trash2, Unlock, UserCheck, Volume2 } from "lucide-react";
+import { Lock, LogOut, Megaphone, Trash2, Unlock, UserCheck, Volume2 } from "lucide-react";
 
 import { useSignOut } from "@/components/shell/sidebar";
 import { Avatar } from "@/components/ui/avatar";
@@ -17,6 +17,7 @@ import { useConnection, useRole } from "@/lib/connection";
 import { formatRelative, formatUptime } from "@/lib/format";
 import { revalidate, useHealth, useSettings, useSystem, useUsers } from "@/lib/hooks";
 import { ROLE_HINTS, ROLE_LABELS } from "@/lib/labels";
+import { SaveStatus, useSettingsAutosave } from "@/lib/autosave";
 import { playAlarm, SOUND_KEY, soundEnabled } from "@/lib/realtime";
 import type { Role, SessionUser, Settings } from "@/lib/types";
 
@@ -113,57 +114,77 @@ function SchoolCard({ settings }: { settings: Settings }) {
   const [admins, setAdmins] = useState(settings.admin_emails ?? "");
   const [domains, setDomains] = useState(settings.allowed_domains ?? "");
   const [autoApprove, setAutoApprove] = useState(Boolean(settings.auto_approve));
-  const [saving, setSaving] = useState(false);
+  const [defaultRole, setDefaultRole] = useState<"viewer" | "operator">(settings.default_role ?? "operator");
+  const { state, save, flush } = useSettingsAutosave();
   const { data: health } = useHealth();
-
-  async function save() {
-    setSaving(true);
-    try {
-      await api("/api/settings", {
-        method: "PUT",
-        json: { school_name: school.trim(), admin_emails: admins, allowed_domains: domains, auto_approve: autoApprove },
-      });
-      toast.success("Đã lưu thông tin nhà trường");
-      revalidate("/api/settings");
-      revalidate("/api/health");
-    } catch (e) {
-      toast.error("Chưa lưu được", { description: (e as Error).message });
-    } finally {
-      setSaving(false);
-    }
-  }
 
   return (
     <Card>
-      <CardHeader
-        eyebrow="Nhà trường"
-        title="Thông tin & đăng nhập"
-        action={
-          <Button size="sm" variant="primary" onClick={save} loading={saving}>
-            {!saving && <Save />} Lưu
-          </Button>
-        }
-      />
+      <CardHeader eyebrow="Nhà trường" title="Thông tin & đăng nhập" action={<SaveStatus state={state} />} />
       <div className="mt-5 space-y-5">
         <Field label="Tên trường" hint="Hiện trên trang đăng nhập và menu.">
-          <Input value={school} onChange={(e) => setSchool(e.target.value)} placeholder="Trường Quốc tế Ánh Dương" maxLength={120} />
+          <Input
+            value={school}
+            onChange={(e) => {
+              setSchool(e.target.value);
+              save({ school_name: e.target.value.trim() }, 900);
+            }}
+            onBlur={() => void flush()}
+            placeholder="Trường Quốc tế Ánh Dương"
+            maxLength={120}
+          />
         </Field>
         <div className="flex items-center justify-between gap-3 rounded-2xl bg-surface-2 px-4 py-3">
           <span className="text-[13px] text-ink-2">Đăng nhập bằng Google</span>
           {health?.auth.mode === "google" ? <Badge tone="success" dot>Đang bật</Badge> : <Badge tone="warning" dot>Chưa bật</Badge>}
         </div>
-        <Field label="Email quản trị viên" hint="Các email này luôn có toàn quyền. Cách nhau bằng dấu phẩy.">
-          <Textarea value={admins} onChange={(e) => setAdmins(e.target.value)} placeholder="hieutruong@truong.edu.vn" className="min-h-20" />
-        </Field>
-        <Field label="Tên miền email của trường" hint="Giáo viên dùng email thuộc các tên miền này được duyệt tự động.">
-          <Input value={domains} onChange={(e) => setDomains(e.target.value)} placeholder="truong.edu.vn" />
-        </Field>
         <SwitchRow
-          label="Tự duyệt mọi tài khoản mới"
-          hint="Không khuyến nghị — ai có tài khoản Google cũng xem được camera (quyền Chỉ xem)."
+          label="Ai đăng nhập cũng dùng được ngay"
+          hint="Không cần quản trị viên duyệt. Tắt nếu chỉ muốn người được duyệt mới xem được camera."
           checked={autoApprove}
-          onCheckedChange={setAutoApprove}
+          onCheckedChange={(value) => {
+            setAutoApprove(value);
+            save({ auto_approve: value });
+          }}
         />
+        {autoApprove && (
+          <Field label="Quyền của tài khoản mới" hint="Có thể đổi quyền từng người trong danh sách Người dùng.">
+            <Select
+              value={defaultRole}
+              onChange={(e) => {
+                const role = e.target.value as "viewer" | "operator";
+                setDefaultRole(role);
+                save({ default_role: role });
+              }}
+            >
+              <option value="operator">{ROLE_LABELS.operator} — xem, ghi nhận sự việc, quay tại chỗ</option>
+              <option value="viewer">{ROLE_LABELS.viewer} — xem và quay tại chỗ</option>
+            </Select>
+          </Field>
+        )}
+        <Field label="Email quản trị viên" hint="Các email này luôn có toàn quyền. Cách nhau bằng dấu phẩy.">
+          <Textarea
+            value={admins}
+            onChange={(e) => {
+              setAdmins(e.target.value);
+              save({ admin_emails: e.target.value }, 1200);
+            }}
+            onBlur={() => void flush()}
+            placeholder="hieutruong@truong.edu.vn"
+            className="min-h-20"
+          />
+        </Field>
+        <Field label="Tên miền email của trường" hint="Email thuộc các tên miền này luôn được dùng ngay với quyền Giáo viên.">
+          <Input
+            value={domains}
+            onChange={(e) => {
+              setDomains(e.target.value);
+              save({ allowed_domains: e.target.value }, 1200);
+            }}
+            onBlur={() => void flush()}
+            placeholder="truong.edu.vn"
+          />
+        </Field>
       </div>
     </Card>
   );
@@ -278,6 +299,7 @@ function UsersCard() {
   const { data: health } = useHealth();
   const google = health?.auth.mode === "google";
   const { data } = useUsers(google);
+  const { data: settings } = useSettings();
   const users = data?.users ?? [];
   const pending = users.filter((u) => u.status === "pending").length;
 
@@ -286,7 +308,11 @@ function UsersCard() {
       <CardHeader
         eyebrow="Quản trị"
         title="Người dùng"
-        description="Thầy cô tự đăng ký bằng Google; quản trị viên duyệt và phân quyền."
+        description={
+          settings?.auto_approve
+            ? "Ai đăng nhập bằng Google cũng dùng được ngay. Quản trị viên có thể đổi quyền hoặc khoá tài khoản."
+            : "Thầy cô tự đăng ký bằng Google; quản trị viên duyệt và phân quyền."
+        }
         action={pending > 0 && <Badge tone="warning">{pending} chờ duyệt</Badge>}
       />
       {!google ? (
@@ -308,28 +334,19 @@ function UsersCard() {
 
 function AiCard({ initial, canEdit }: { initial: Settings; canEdit: boolean }) {
   const [draft, setDraft] = useState(initial);
-  const [saving, setSaving] = useState(false);
-  const dirty = JSON.stringify(draft) !== JSON.stringify(initial);
+  const { state, save } = useSettingsAutosave();
 
   function set<K extends keyof Settings>(key: K, value: Settings[K]) {
     setDraft((d) => ({ ...d, [key]: value }));
   }
 
-  async function save() {
-    setSaving(true);
-    try {
-      const { bullying_threshold, bullying_min_hits, event_cooldown, anger_threshold, pre_roll_seconds, post_roll_seconds, record_fps, video_sample_fps, record_max_width, tts_alert } = draft;
-      await api("/api/settings", {
-        method: "PUT",
-        json: { bullying_threshold, bullying_min_hits, event_cooldown, anger_threshold, pre_roll_seconds, post_roll_seconds, record_fps, video_sample_fps, record_max_width, tts_alert },
-      });
-      toast.success("Đã lưu cài đặt AI");
-      revalidate("/api/settings");
-    } catch (e) {
-      toast.error("Chưa lưu được", { description: (e as Error).message });
-    } finally {
-      setSaving(false);
-    }
+  /** Thanh trượt: đổi số khi kéo, lưu khi thả tay */
+  function range<K extends keyof Settings>(key: K) {
+    return {
+      value: draft[key] as number,
+      onChange: (v: number) => set(key, v as Settings[K]),
+      onCommit: (v: number) => save({ [key]: v } as Partial<Settings>),
+    };
   }
 
   return (
@@ -337,94 +354,55 @@ function AiCard({ initial, canEdit }: { initial: Settings; canEdit: boolean }) {
       <CardHeader
         eyebrow="AI & ghi hình"
         title="Độ nhạy phát hiện"
-        action={
-          canEdit && (
-            <>
-              {dirty && (
-                <Button size="sm" variant="ghost" onClick={() => setDraft(initial)}>
-                  <RotateCcw /> Hoàn tác
-                </Button>
-              )}
-              <Button size="sm" variant="primary" onClick={save} loading={saving} disabled={!dirty}>
-                {!saving && <Save />} Lưu
-              </Button>
-            </>
-          )
-        }
+        action={canEdit ? <SaveStatus state={state} /> : undefined}
       />
       {!canEdit && <p className="mt-2 text-[13px] text-ink-3">Chỉ quản trị viên được thay đổi các thông số này.</p>}
       <fieldset disabled={!canEdit} className="mt-6 grid gap-x-10 gap-y-7 disabled:opacity-60 lg:grid-cols-2">
         <RangeField
           label="Ngưỡng báo động bắt nạt"
           hint="Thấp hơn = nhạy hơn nhưng dễ báo nhầm. Khuyến nghị 65–80%."
-          value={draft.bullying_threshold}
           min={30}
           max={99}
           unit="%"
-          onChange={(v) => set("bullying_threshold", v)}
+          {...range("bullying_threshold")}
         />
         <RangeField
           label="Số lần phát hiện liên tiếp"
           hint={`Báo động sau khoảng ${(draft.bullying_min_hits * 0.5).toFixed(1)} giây liên tục.`}
-          value={draft.bullying_min_hits}
           min={1}
           max={12}
-          onChange={(v) => set("bullying_min_hits", v)}
+          {...range("bullying_min_hits")}
         />
-        <RangeField
-          label="Nghỉ giữa 2 lần báo cùng camera"
-          value={draft.event_cooldown}
-          min={0}
-          max={300}
-          step={5}
-          unit=" giây"
-          onChange={(v) => set("event_cooldown", v)}
-        />
+        <RangeField label="Nghỉ giữa 2 lần báo cùng camera" min={0} max={300} step={5} unit=" giây" {...range("event_cooldown")} />
         <RangeField
           label="Ngưỡng la hét, căng thẳng"
           hint="Tính từ âm lượng và lời nói tiêu cực."
-          value={draft.anger_threshold}
           min={30}
           max={100}
           unit="%"
-          onChange={(v) => set("anger_threshold", v)}
+          {...range("anger_threshold")}
         />
-        <RangeField
-          label="Lưu video trước sự việc"
-          value={draft.pre_roll_seconds}
-          min={0}
-          max={30}
-          unit=" giây"
-          onChange={(v) => set("pre_roll_seconds", v)}
-        />
-        <RangeField
-          label="Lưu video sau sự việc"
-          value={draft.post_roll_seconds}
-          min={3}
-          max={120}
-          unit=" giây"
-          onChange={(v) => set("post_roll_seconds", v)}
-        />
-        <RangeField
-          label="Độ mượt của clip lưu"
-          value={draft.record_fps}
-          min={2}
-          max={25}
-          unit=" khung/giây"
-          onChange={(v) => set("record_fps", v)}
-        />
+        <RangeField label="Lưu video trước sự việc" min={0} max={30} unit=" giây" {...range("pre_roll_seconds")} />
+        <RangeField label="Lưu video sau sự việc" min={3} max={120} unit=" giây" {...range("post_roll_seconds")} />
+        <RangeField label="Độ mượt của clip lưu" min={2} max={25} unit=" khung/giây" {...range("record_fps")} />
         <RangeField
           label="Độ kỹ khi AI xem lại video"
           hint="Nhiều khung/giây hơn = chính xác hơn nhưng chậm hơn."
-          value={draft.video_sample_fps}
           min={0.5}
           max={6}
           step={0.5}
           unit=" khung/giây"
-          onChange={(v) => set("video_sample_fps", v)}
+          {...range("video_sample_fps")}
         />
         <Field label="Độ nét clip lưu">
-          <Select value={String(draft.record_max_width)} onChange={(e) => set("record_max_width", Number(e.target.value))}>
+          <Select
+            value={String(draft.record_max_width)}
+            onChange={(e) => {
+              const width = Number(e.target.value);
+              set("record_max_width", width);
+              save({ record_max_width: width });
+            }}
+          >
             {[
               [640, "Tiết kiệm"],
               [960, "Vừa"],
@@ -441,7 +419,10 @@ function AiCard({ initial, canEdit }: { initial: Settings; canEdit: boolean }) {
           label="Đọc cảnh báo qua loa"
           hint="Loa máy chủ tự đọc khi có sự việc nghiêm trọng"
           checked={draft.tts_alert}
-          onCheckedChange={(v) => set("tts_alert", v)}
+          onCheckedChange={(v) => {
+            set("tts_alert", v);
+            save({ tts_alert: v });
+          }}
         />
       </fieldset>
     </Card>
@@ -485,11 +466,11 @@ export function SettingsView() {
         <div className="space-y-5 lg:space-y-6">
           <AccountCard />
           <AlertsCard />
-          {isAdmin && settings && <SchoolCard key={`${settings.school_name}|${settings.admin_emails}|${settings.allowed_domains}|${settings.auto_approve}`} settings={settings} />}
+          {isAdmin && settings && <SchoolCard settings={settings} />}
         </div>
         <div className="space-y-5 lg:space-y-6">
           {isAdmin && <UsersCard />}
-          {settings ? <AiCard key={JSON.stringify(settings)} initial={settings} canEdit={isAdmin} /> : <Skeleton className="h-96" />}
+          {settings ? <AiCard initial={settings} canEdit={isAdmin} /> : <Skeleton className="h-96" />}
           {isAdmin && <SystemCard />}
         </div>
       </div>

@@ -18,11 +18,12 @@ import {
   Search,
   Smartphone,
   Trash2,
+  Webcam,
 } from "lucide-react";
 
 import { useCameraActions } from "@/components/camera/camera-actions";
 import { aiVerdict, CameraStateBadge } from "@/components/camera/camera-bits";
-import { AddCameraDialog, EditCameraDialog } from "@/components/camera/camera-dialogs";
+import { AddCameraDialog, EditCameraDialog, deviceTitle } from "@/components/camera/camera-dialogs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, PageHeader } from "@/components/ui/card";
@@ -33,8 +34,8 @@ import { Switch } from "@/components/ui/switch";
 import { api, mediaUrl } from "@/lib/api";
 import { useRole } from "@/lib/connection";
 import { formatRelative } from "@/lib/format";
-import { revalidate, useCameras, useDiscovered, useSettings } from "@/lib/hooks";
-import type { Camera, DiscoveredDevice, DiscoverySnapshot } from "@/lib/types";
+import { revalidate, useCameras, useDiscovered, useSettings, useWebcams } from "@/lib/hooks";
+import type { Camera, DiscoveredDevice, DiscoverySnapshot, ServerWebcam } from "@/lib/types";
 
 /** Ảnh thu nhỏ làm mới mỗi 10 giây. */
 function useThumbTick() {
@@ -184,10 +185,20 @@ function CameraRow({
   );
 }
 
-function NetworkPanel({ onConnect }: { onConnect: (device: DiscoveredDevice) => void }) {
+function NetworkPanel({
+  onConnect,
+  onWebcam,
+}: {
+  onConnect: (device: DiscoveredDevice) => void;
+  onWebcam: (webcam: ServerWebcam) => void;
+}) {
   const { data, mutate } = useDiscovered(true);
+  const { data: webcamData } = useWebcams(true);
   const [scanning, setScanning] = useState(false);
   const fresh = (data?.devices ?? []).filter((d) => !d.added);
+  // Webcam ảo (OBS, điện thoại) chỉ hiện trong hộp thoại Thêm camera
+  const webcams = (webcamData?.webcams ?? []).filter((w) => !w.added && !w.virtual);
+  const total = fresh.length + webcams.length;
 
   async function rescan() {
     setScanning(true);
@@ -204,10 +215,10 @@ function NetworkPanel({ onConnect }: { onConnect: (device: DiscoveredDevice) => 
   }
 
   return (
-    <Card className={fresh.length ? "ring-1 ring-brand/15" : undefined}>
+    <Card className={total ? "ring-1 ring-brand/15" : undefined}>
       <CardHeader
         eyebrow="Cùng mạng WiFi của trường"
-        title={fresh.length ? `${fresh.length} camera sẵn sàng kết nối` : "Tự tìm camera trong mạng"}
+        title={total ? `${total} camera sẵn sàng kết nối` : "Tự tìm camera trong mạng"}
         description={
           data?.scanned_at
             ? `Máy chủ tự quét mạng mỗi 10 phút · lần cuối ${formatRelative(data.scanned_at)}`
@@ -219,7 +230,7 @@ function NetworkPanel({ onConnect }: { onConnect: (device: DiscoveredDevice) => 
           </Button>
         }
       />
-      {fresh.length > 0 && (
+      {total > 0 && (
         <ul className="mt-5 grid gap-2.5 md:grid-cols-2">
           {fresh.map((device) => (
             <li key={device.ip} className="flex items-center gap-3.5 rounded-2xl border border-hairline bg-surface-2 px-4 py-3">
@@ -227,11 +238,27 @@ function NetworkPanel({ onConnect }: { onConnect: (device: DiscoveredDevice) => 
                 <RadioTower className="size-4.5" strokeWidth={1.75} />
               </span>
               <div className="min-w-0 flex-1">
-                <div className="text-sm font-medium text-ink tabular">{device.ip}</div>
-                <div className="text-xs text-ink-3">{device.kind === "onvif" ? "Hỗ trợ kết nối nhanh (ONVIF)" : "Camera IP (RTSP)"}</div>
+                <div className="truncate text-sm font-medium text-ink">{deviceTitle(device)}</div>
+                <div className="truncate text-xs text-ink-3 tabular">
+                  {device.ip} · {device.kind === "onvif" ? "kết nối nhanh" : "camera IP"}
+                </div>
               </div>
               <Button variant="primary" size="sm" onClick={() => onConnect(device)}>
                 Kết nối
+              </Button>
+            </li>
+          ))}
+          {webcams.map((webcam) => (
+            <li key={webcam.name} className="flex items-center gap-3.5 rounded-2xl border border-hairline bg-surface-2 px-4 py-3">
+              <span className="grid size-10 shrink-0 place-items-center rounded-full bg-[#f5eee1] text-[#7a5f2c]">
+                <Webcam className="size-4.5" strokeWidth={1.75} />
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-medium text-ink">{webcam.name}</div>
+                <div className="truncate text-xs text-ink-3">Webcam gắn vào máy chủ · không cần mật khẩu</div>
+              </div>
+              <Button variant="primary" size="sm" onClick={() => onWebcam(webcam)}>
+                Thêm
               </Button>
             </li>
           ))}
@@ -284,6 +311,7 @@ export function CamerasView() {
   const [search, setSearch] = useState("");
   const [adding, setAdding] = useState(params.get("add") === "1" && isAdmin);
   const [device, setDevice] = useState<DiscoveredDevice | null>(null);
+  const [webcam, setWebcam] = useState<ServerWebcam | null>(null);
   const [editing, setEditing] = useState<Camera | null>(null);
   const [deleting, setDeleting] = useState<Camera | null>(null);
   const [busy, setBusy] = useState(false);
@@ -330,7 +358,7 @@ export function CamerasView() {
         }
       />
 
-      {isAdmin && <NetworkPanel onConnect={setDevice} />}
+      {isAdmin && <NetworkPanel onConnect={setDevice} onWebcam={setWebcam} />}
       <PhonesPanel phones={phones} />
 
       <Card padded={false} className="overflow-hidden">
@@ -378,12 +406,14 @@ export function CamerasView() {
       </Card>
 
       <AddCameraDialog
-        open={adding || Boolean(device)}
+        open={adding || Boolean(device) || Boolean(webcam)}
         device={device}
+        webcam={webcam}
         onOpenChange={(open) => {
           if (open) return;
           setAdding(false);
           setDevice(null);
+          setWebcam(null);
           if (params.get("add")) router.replace("/cameras");
         }}
       />

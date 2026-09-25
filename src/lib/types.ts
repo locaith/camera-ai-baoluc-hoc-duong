@@ -69,8 +69,8 @@ export interface Camera {
   recording: RecordingStatus | null;
   error: string;
   speech: SpeechStatus;
-  /** "phone" = điện thoại/laptop đang quay bằng trang "Quay tại chỗ" */
-  source?: "rtsp" | "phone";
+  /** "phone" = điện thoại/laptop đang quay bằng trang "Quay tại chỗ", "webcam" = webcam gắn vào máy chủ */
+  source?: "rtsp" | "phone" | "webcam";
   virtual?: boolean;
   owner?: string;
 }
@@ -254,6 +254,8 @@ export interface Settings {
   admin_emails?: string;
   allowed_domains?: string;
   auto_approve?: boolean;
+  /** Quyền của tài khoản được duyệt tự động */
+  default_role?: "viewer" | "operator";
 }
 
 export type TimelineBucket = { t: number } & Record<EventType, number>;
@@ -346,6 +348,8 @@ export interface Health {
   auth: { mode: AuthMode; google_client_id: string };
   /** Máy chủ chưa bật đăng nhập Google: chỉ dùng được ngay trên máy chủ */
   setup_required: boolean;
+  /** Ai đăng nhập cũng dùng được ngay, không chờ duyệt */
+  open_signup?: boolean;
   local: boolean;
   time: number;
 }
@@ -364,6 +368,9 @@ export interface DiscoveredDevice {
   xaddr: string;
   rtsp_ports: number[];
   kind: "onvif" | "rtsp";
+  /** Hãng / model đọc từ ONVIF (không cần đăng nhập camera) */
+  brand?: string;
+  model?: string;
   first_seen: number;
   last_seen: number;
   added: boolean;
@@ -377,9 +384,20 @@ export interface DiscoverySnapshot {
   new: number;
 }
 
+/** Webcam gắn vào máy chủ (USB, webcam có sẵn) — không cần mật khẩu */
+export interface ServerWebcam {
+  name: string;
+  audio: string;
+  virtual: boolean;
+  url: string;
+  added: boolean;
+}
+
 export interface RtspProbe {
   success: boolean;
   error?: string;
+  /** Lỗi kỹ thuật (đã che mật khẩu) */
+  detail?: string;
   width?: number;
   height?: number;
   codec?: string;

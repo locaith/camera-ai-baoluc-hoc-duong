@@ -10,6 +10,7 @@ import type {
   DiscoverySnapshot,
   Health,
   HistoryPoint,
+  ServerWebcam,
   SessionUser,
   Settings,
   StatsOverview,
@@ -83,6 +84,10 @@ export const useVideo = (id: string | null) =>
 /** Camera trong cùng mạng WiFi/LAN với máy chủ (chỉ quản trị viên). */
 export const useDiscovered = (enabled: boolean) =>
   useApi<DiscoverySnapshot>(enabled ? "/api/cameras/discovered" : null, { refreshInterval: 60000 });
+
+/** Webcam gắn vào máy chủ (chỉ quản trị viên). */
+export const useWebcams = (enabled: boolean) =>
+  useApi<{ webcams: ServerWebcam[] }>(enabled ? "/api/cameras/webcams" : null, { refreshInterval: 60000 });
 
 /** /api/health không cần đăng nhập: biết hệ thống có sống và đang dùng kiểu đăng nhập nào. */
 export function useHealth() {

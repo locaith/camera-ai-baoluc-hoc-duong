@@ -1,17 +1,19 @@
 "use client";
 
 import { useState } from "react";
-import { Clapperboard, Search, Upload, X } from "lucide-react";
+import { toast } from "sonner";
+import { CheckSquare, Clapperboard, Search, Trash2, Upload, X } from "lucide-react";
 
 import { UploadDropzone } from "@/components/videos/upload-dropzone";
 import { VideoCard } from "@/components/videos/video-card";
 import { Button } from "@/components/ui/button";
 import { Card, PageHeader } from "@/components/ui/card";
-import { Empty, Skeleton } from "@/components/ui/feedback";
+import { Confirm, Empty, Skeleton } from "@/components/ui/feedback";
 import { Input } from "@/components/ui/form";
-import { query } from "@/lib/api";
+import { api, query } from "@/lib/api";
 import { useRole } from "@/lib/connection";
-import { useVideos } from "@/lib/hooks";
+import { revalidate, useVideos } from "@/lib/hooks";
+import type { Video } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 type Tab = "all" | "flagged" | "event" | "phone" | "recording" | "upload";
@@ -26,7 +28,11 @@ const TABS: { value: Tab; label: string }[] = [
 ];
 
 export function VideosView() {
-  const { isOperator } = useRole();
+  const { isAdmin, isOperator } = useRole();
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const [deleting, setDeleting] = useState<Video[] | null>(null);
+  const [busy, setBusy] = useState(false);
   const [tab, setTab] = useState<Tab>("all");
   const [search, setSearch] = useState("");
   const [showUpload, setShowUpload] = useState(false);
@@ -45,6 +51,45 @@ export function VideosView() {
     }),
   );
 
+  const videos = data?.videos ?? [];
+
+  function toggle(id: string) {
+    setSelected((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function stopSelecting() {
+    setSelecting(false);
+    setSelected(new Set());
+  }
+
+  async function removeVideos(list: Video[]) {
+    setBusy(true);
+    let done = 0;
+    const failed: string[] = [];
+    for (const video of list) {
+      try {
+        await api(`/api/videos/${video.id}`, { method: "DELETE" });
+        done += 1;
+      } catch {
+        failed.push(video.title);
+      }
+    }
+    setBusy(false);
+    setDeleting(null);
+    revalidate("/api/videos");
+    revalidate("/api/storage");
+    if (done) toast.success(done === 1 ? "Đã xoá video" : `Đã xoá ${done} video`);
+    if (failed.length) toast.error(`Chưa xoá được ${failed.length} video`, { description: failed.slice(0, 3).join(", ") });
+    stopSelecting();
+  }
+
+  const selectedVideos = videos.filter((video) => selected.has(video.id));
+
   return (
     <div className="space-y-7">
       <PageHeader
@@ -52,15 +97,50 @@ export function VideosView() {
         title="Video"
         description="Clip tự lưu khi có sự việc, video quay tại chỗ và video thầy cô tải lên — AI xem lại từng video và đánh dấu những đoạn cần chú ý."
         actions={
-          isOperator && (
-            <Button variant={showUpload ? "secondary" : "primary"} onClick={() => setShowUpload(!showUpload)}>
-              {showUpload ? <X /> : <Upload />} {showUpload ? "Đóng" : "Tải video lên"}
-            </Button>
+          (isOperator || isAdmin) && (
+            <div className="flex flex-wrap gap-2">
+              {isAdmin && videos.length > 0 && (
+                <Button variant="secondary" onClick={() => (selecting ? stopSelecting() : setSelecting(true))}>
+                  {selecting ? <X /> : <CheckSquare />} {selecting ? "Thôi chọn" : "Chọn để xoá"}
+                </Button>
+              )}
+              {isOperator && !selecting && (
+                <Button variant={showUpload ? "secondary" : "primary"} onClick={() => setShowUpload(!showUpload)}>
+                  {showUpload ? <X /> : <Upload />} {showUpload ? "Đóng" : "Tải video lên"}
+                </Button>
+              )}
+            </div>
           )
         }
       />
 
-      {showUpload && isOperator && (
+      {selecting && (
+        <div className="sticky top-[calc(env(safe-area-inset-top,0px)+12px)] z-20 flex flex-wrap items-center gap-3 rounded-2xl border border-hairline bg-surface/95 px-4 py-3 shadow-soft backdrop-blur-md">
+          <span className="text-sm text-ink-2">
+            {selected.size ? (
+              <>
+                Đã chọn <b className="text-ink tabular">{selected.size}</b> video
+              </>
+            ) : (
+              "Bấm vào các video muốn xoá"
+            )}
+          </span>
+          <div className="ml-auto flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setSelected(selected.size === videos.length ? new Set() : new Set(videos.map((video) => video.id)))}
+            >
+              {selected.size === videos.length ? "Bỏ chọn tất cả" : `Chọn tất cả (${videos.length})`}
+            </Button>
+            <Button size="sm" variant="danger-solid" disabled={!selected.size} onClick={() => setDeleting(selectedVideos)}>
+              <Trash2 /> Xoá {selected.size ? selected.size : ""} video
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {showUpload && isOperator && !selecting && (
         <Card className="animate-rise">
           <UploadDropzone />
         </Card>
@@ -113,7 +193,14 @@ export function VideosView() {
         <>
           <div className={cn("grid gap-5 transition-opacity sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4", isValidating && "opacity-90")}>
             {data.videos.map((video) => (
-              <VideoCard key={video.id} video={video} />
+              <VideoCard
+                key={video.id}
+                video={video}
+                selectable={selecting}
+                selected={selected.has(video.id)}
+                onToggle={() => toggle(video.id)}
+                onDelete={isAdmin ? () => setDeleting([video]) : undefined}
+              />
             ))}
           </div>
           {data.videos.length < data.total && (
@@ -132,6 +219,21 @@ export function VideosView() {
           </Empty>
         </Card>
       )}
+
+      <Confirm
+        open={Boolean(deleting)}
+        onOpenChange={(open) => !open && !busy && setDeleting(null)}
+        title={deleting && deleting.length > 1 ? `Xoá ${deleting.length} video?` : "Xoá video này?"}
+        description={
+          deleting && deleting.length > 1
+            ? "Các video đã chọn cùng kết quả AI xem lại sẽ bị xoá vĩnh viễn và không thể khôi phục."
+            : `“${deleting?.[0]?.title ?? ""}” cùng kết quả AI xem lại sẽ bị xoá vĩnh viễn và không thể khôi phục.`
+        }
+        confirmLabel="Xoá vĩnh viễn"
+        danger
+        loading={busy}
+        onConfirm={() => deleting && void removeVideos(deleting)}
+      />
     </div>
   );
 }

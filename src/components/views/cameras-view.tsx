@@ -145,15 +145,16 @@ function CameraRow({
         ))}
       </div>
 
-      {camera.source === "remote" && isAdmin && (
-        <Button variant={camera.state === "waiting" ? "primary" : "secondary"} size="sm" asChild className="col-start-2 justify-self-start lg:col-start-auto lg:justify-self-auto">
-          <Link href={`/cameras/${camera.id}/stream`}>
-            <MonitorUp /> Phát từ máy này
-          </Link>
-        </Button>
-      )}
+      <div className="flex items-center gap-2">
+        {camera.source === "remote" && isAdmin && (
+          <Button variant={camera.state === "waiting" ? "primary" : "secondary"} size="sm" asChild>
+            <Link href={`/cameras/${camera.id}/stream`} aria-label="Phát từ máy này">
+              <MonitorUp /> <span className="hidden sm:inline">Phát từ máy này</span>
+            </Link>
+          </Button>
+        )}
 
-      <Menu>
+        <Menu>
         <MenuTrigger asChild>
           <Button variant="ghost" size="icon-sm" aria-label={`Thao tác ${camera.name}`}>
             <EllipsisVertical />
@@ -201,7 +202,8 @@ function CameraRow({
             </>
           )}
         </MenuContent>
-      </Menu>
+        </Menu>
+      </div>
     </div>
   );
 }

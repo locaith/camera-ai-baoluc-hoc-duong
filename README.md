@@ -57,7 +57,7 @@ Vercel → Settings → Environment Variables. Trên máy chủ AI, domain Verce
 ## Bật đăng nhập Google
 
 1. [Google Cloud Console](https://console.cloud.google.com/apis/credentials) → **Create credentials → OAuth client ID** → *Web application*.
-2. **Authorized JavaScript origins**: `https://camera-ai-baoluc-hoc-duong.vercel.app` và `http://localhost:3000` (không cần redirect URI).
+2. **Authorized JavaScript origins**: `https://camera-bao-luc-hoc-duong.vercel.app` và `http://localhost:3000` (không cần redirect URI).
 3. Trên máy chủ AI mở `http://127.0.0.1:8100/setup`, dán Client ID, nhập email quản trị viên rồi Lưu — có hiệu lực ngay.
 
 Người đăng nhập lần đầu được tạo tài khoản ở trạng thái **chờ duyệt** (trừ email quản trị và tên miền được phép).

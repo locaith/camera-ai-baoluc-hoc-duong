@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
+  MonitorUp,
   ArrowLeft,
   ArrowUpRight,
   AudioLines,
@@ -92,6 +93,9 @@ export function CameraDetailView({ id }: { id: string }) {
             <div className="mt-2 flex flex-wrap items-center gap-2.5 text-[15px] text-ink-2">
               <CameraStateBadge state={camera.state} />
               {camera.location || (camera.virtual ? `Quay bởi ${camera.owner}` : "Chưa đặt vị trí")}
+              {camera.source === "remote" && camera.state === "online" && camera.owner && (
+                <span className="text-ink-3">· đang phát từ {camera.owner}</span>
+              )}
             </div>
           </div>
           {!camera.virtual && (
@@ -112,6 +116,13 @@ export function CameraDetailView({ id }: { id: string }) {
               {isOperator && (
                 <Button size="sm" onClick={() => actions.mark(camera)} disabled={!online}>
                   <Flag /> Đánh dấu
+                </Button>
+              )}
+              {isAdmin && camera.source === "remote" && (
+                <Button size="sm" variant={camera.state === "waiting" ? "primary" : "secondary"} asChild>
+                  <Link href={`/cameras/${camera.id}/stream`}>
+                    <MonitorUp /> Phát từ máy này
+                  </Link>
                 </Button>
               )}
               {isAdmin && (

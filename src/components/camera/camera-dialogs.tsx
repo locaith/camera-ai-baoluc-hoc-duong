@@ -729,7 +729,7 @@ function EditCameraBody({ camera, onDone }: { camera: Camera; onDone: () => void
   });
   const [saving, setSaving] = useState(false);
   const [changeUrl, setChangeUrl] = useState(false);
-  const isWebcam = camera.source === "webcam";
+  const isWebcam = camera.source === "webcam" || camera.source === "remote";
 
   async function save(e: React.FormEvent) {
     e.preventDefault();

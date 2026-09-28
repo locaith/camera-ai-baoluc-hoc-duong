@@ -72,6 +72,7 @@ export const STATE_LABELS: Record<CameraState, string> = {
   connecting: "Đang kết nối",
   error: "Mất tín hiệu",
   offline: "Đã tắt",
+  waiting: "Chờ máy phát",
 };
 
 export const SOURCE_LABELS: Record<VideoSource, string> = {

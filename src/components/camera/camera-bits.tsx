@@ -11,6 +11,7 @@ export function CameraStateBadge({ state, className }: { state: CameraState; cla
     connecting: "warning",
     error: "critical",
     offline: "neutral",
+    waiting: "gold",
   } as const;
   return (
     <Badge tone={tone[state]} dot pulse={state === "connecting"} className={className}>

@@ -9,6 +9,7 @@ import {
   CircleDot,
   EllipsisVertical,
   ExternalLink,
+  MonitorUp,
   Pencil,
   Plus,
   Power,
@@ -27,8 +28,9 @@ import { AddCameraDialog, EditCameraDialog, deviceTitle } from "@/components/cam
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, PageHeader } from "@/components/ui/card";
-import { Confirm, Empty, Skeleton } from "@/components/ui/feedback";
-import { Input } from "@/components/ui/form";
+import { Dialog, DialogContent, DialogFooter } from "@/components/ui/dialog";
+import { Confirm, Empty, Notice, Skeleton } from "@/components/ui/feedback";
+import { Field, Input } from "@/components/ui/form";
 import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from "@/components/ui/menu";
 import { Switch } from "@/components/ui/switch";
 import { api, mediaUrl } from "@/lib/api";
@@ -109,7 +111,11 @@ function CameraRow({
       <div className="hidden min-w-0 space-y-1.5 lg:block">
         <CameraStateBadge state={camera.state} />
         <div className={verdict.level === 2 && camera.state === "online" ? "text-xs text-critical" : "text-xs text-ink-3"}>
-          {camera.state === "online"
+          {camera.source === "remote" && camera.state === "online" && camera.owner
+            ? `Đang phát từ ${camera.owner}`
+            : camera.state === "waiting"
+              ? "Chưa có máy nào phát hình"
+              : camera.state === "online"
             ? camera.ai_enabled
               ? `AI: ${verdict.label.toLowerCase()}`
               : "AI đang tắt"
@@ -139,6 +145,14 @@ function CameraRow({
         ))}
       </div>
 
+      {camera.source === "remote" && isAdmin && (
+        <Button variant={camera.state === "waiting" ? "primary" : "secondary"} size="sm" asChild className="col-start-2 justify-self-start lg:col-start-auto lg:justify-self-auto">
+          <Link href={`/cameras/${camera.id}/stream`}>
+            <MonitorUp /> Phát từ máy này
+          </Link>
+        </Button>
+      )}
+
       <Menu>
         <MenuTrigger asChild>
           <Button variant="ghost" size="icon-sm" aria-label={`Thao tác ${camera.name}`}>
@@ -151,6 +165,13 @@ function CameraRow({
               <ExternalLink /> Mở chi tiết
             </Link>
           </MenuItem>
+          {isAdmin && camera.source === "remote" && (
+            <MenuItem asChild>
+              <Link href={`/cameras/${camera.id}/stream`}>
+                <MonitorUp /> Phát từ máy này
+              </Link>
+            </MenuItem>
+          )}
           {isAdmin && (
             <MenuItem onSelect={onEdit}>
               <Pencil /> Sửa thông tin
@@ -217,7 +238,7 @@ function NetworkPanel({
   return (
     <Card className={total ? "ring-1 ring-brand/15" : undefined}>
       <CardHeader
-        eyebrow="Cùng mạng WiFi của trường"
+        eyebrow="Cùng mạng với máy chủ"
         title={total ? `${total} camera sẵn sàng kết nối` : "Tự tìm camera trong mạng"}
         description={
           data?.scanned_at
@@ -230,6 +251,10 @@ function NetworkPanel({
           </Button>
         }
       />
+      <p className="mt-3 text-[13px] text-ink-3">
+        Camera ở nơi khác (nhà, lớp học khác mạng)? Bấm <b className="font-medium text-ink-2">Phát webcam từ máy này</b> trên
+        máy tính đặt cạnh camera đó.
+      </p>
       {total > 0 && (
         <ul className="mt-5 grid gap-2.5 md:grid-cols-2">
           {fresh.map((device) => (
@@ -265,6 +290,61 @@ function NetworkPanel({
         </ul>
       )}
     </Card>
+  );
+}
+
+function RemoteCameraDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+  const router = useRouter();
+  const [name, setName] = useState("");
+  const [location, setLocation] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  async function create(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      const camera = await api<Camera>("/api/cameras", {
+        method: "POST",
+        json: { source: "remote", name: name.trim() || "Webcam", location: location.trim() },
+      });
+      revalidate("/api/cameras");
+      onOpenChange(false);
+      router.push(`/cameras/${camera.id}/stream`);
+    } catch (error) {
+      toast.error("Chưa tạo được camera", { description: (error as Error).message });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent
+        title="Phát webcam từ máy này"
+        description="Webcam trên máy tính này sẽ thành một camera của hệ thống: AI phân tích, cảnh báo và lưu clip như camera cố định."
+      >
+        <form onSubmit={create} className="space-y-4">
+          <Field label="Tên camera">
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ví dụ: Webcam lớp 7C10" autoFocus />
+          </Field>
+          <Field label="Vị trí" hint="Nơi đặt máy tính, giúp thầy cô biết camera đang nhìn khu vực nào.">
+            <Input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Ví dụ: Hành lang tầng 2" />
+          </Field>
+          <Notice tone="neutral">
+            Máy tính này cần mở trang phát và giữ trang mở. Máy khác (cũng là quản trị viên) có thể phát thay bằng nút{" "}
+            <b>Phát từ máy này</b> trong danh sách camera.
+          </Notice>
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
+              Huỷ
+            </Button>
+            <Button type="submit" variant="primary" loading={saving}>
+              <MonitorUp /> Tạo và mở trang phát
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -310,6 +390,7 @@ export function CamerasView() {
   const tick = useThumbTick();
   const [search, setSearch] = useState("");
   const [adding, setAdding] = useState(params.get("add") === "1" && isAdmin);
+  const [addingRemote, setAddingRemote] = useState(false);
   const [device, setDevice] = useState<DiscoveredDevice | null>(null);
   const [webcam, setWebcam] = useState<ServerWebcam | null>(null);
   const [editing, setEditing] = useState<Camera | null>(null);
@@ -351,9 +432,14 @@ export function CamerasView() {
         }
         actions={
           isAdmin && (
-            <Button variant="primary" onClick={() => setAdding(true)}>
-              <Plus /> Thêm camera
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="secondary" onClick={() => setAddingRemote(true)}>
+                <MonitorUp /> Phát webcam từ máy này
+              </Button>
+              <Button variant="primary" onClick={() => setAdding(true)}>
+                <Plus /> Thêm camera
+              </Button>
+            </div>
           )
         }
       />
@@ -418,6 +504,7 @@ export function CamerasView() {
         }}
       />
       <EditCameraDialog camera={editing} onOpenChange={(open) => !open && setEditing(null)} />
+      <RemoteCameraDialog open={addingRemote} onOpenChange={setAddingRemote} />
       <Confirm
         open={Boolean(deleting)}
         onOpenChange={(open) => !open && setDeleting(null)}

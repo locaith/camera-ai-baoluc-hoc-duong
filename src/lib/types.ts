@@ -1,4 +1,5 @@
-export type CameraState = "online" | "connecting" | "error" | "offline";
+/** waiting: camera từ máy khác đang chờ máy đó phát hình */
+export type CameraState = "online" | "connecting" | "error" | "offline" | "waiting";
 
 export interface Analysis {
   class: string;
@@ -69,8 +70,9 @@ export interface Camera {
   recording: RecordingStatus | null;
   error: string;
   speech: SpeechStatus;
-  /** "phone" = điện thoại/laptop đang quay bằng trang "Quay tại chỗ", "webcam" = webcam gắn vào máy chủ */
-  source?: "rtsp" | "phone" | "webcam";
+  /** "phone" = điện thoại/laptop đang quay bằng trang "Quay tại chỗ", "webcam" = webcam gắn vào máy chủ,
+   *  "remote" = webcam trên máy của quản trị viên, phát lên từ trang "Phát camera" */
+  source?: "rtsp" | "phone" | "webcam" | "remote";
   virtual?: boolean;
   owner?: string;
 }

@@ -25,7 +25,7 @@ Trình duyệt ──HTTPS──▶ Website (Vercel)
 | Quay tại chỗ | Mọi người | Camera điện thoại/laptop gửi ~4 khung/giây về máy chủ để AI phân tích trực tiếp (cảnh báo, ảnh, clip như camera cố định); ghi video trên máy và gửi về khi dừng để AI xem lại toàn bộ |
 | Sự việc | Mọi người | Cần xem · Đã xác nhận · Đã xử lý · Báo nhầm; ảnh + đoạn video; ghi chú và người xử lý |
 | Video | Mọi người | Clip sự việc, quay tại chỗ, ghi thủ công, tải lên; dòng thời gian AI bấm để tua |
-| Camera | Quản trị viên | Camera **tự tìm thấy trong cùng mạng WiFi** (ONVIF + cổng RTSP) → bấm Kết nối; thêm thủ công |
+| Camera | Quản trị viên | Camera **tự tìm thấy trong cùng mạng WiFi** (ONVIF + cổng RTSP) → bấm Kết nối; thêm thủ công; **Máy cầu nối ở trường** (laptop cùng WiFi với camera IP, ghép nối bằng mã 6 số, gửi hình về máy chủ AI); phát webcam từ máy này |
 | Lưu trữ | Quản trị viên | Máy chủ → AI → đám mây (R2), chính sách tự chuyển |
 | Cài đặt | Mọi người | Tài khoản, chuông báo; quản trị viên: tên trường, email quản trị, tên miền tự duyệt, người dùng, độ nhạy AI |
 

@@ -73,6 +73,9 @@ export interface Camera {
   /** "phone" = điện thoại/laptop đang quay bằng trang "Quay tại chỗ", "webcam" = webcam gắn vào máy chủ,
    *  "remote" = webcam trên máy của quản trị viên, phát lên từ trang "Phát camera" */
   source?: "rtsp" | "phone" | "webcam" | "remote";
+  /** Camera do máy cầu nối ở trường gửi hình (rỗng nếu không phải) */
+  bridge_id?: string;
+  bridge_name?: string;
   virtual?: boolean;
   owner?: string;
 }
@@ -406,4 +409,15 @@ export interface RtspProbe {
   has_audio?: boolean;
   audio_codec?: string;
   snapshot?: string;
+}
+
+/** Máy cầu nối: máy tính ở trường đọc camera IP trong mạng trường và gửi hình về máy chủ */
+export interface Bridge {
+  id: string;
+  name: string;
+  created_at: number;
+  last_seen: number | null;
+  version: string;
+  streaming: number;
+  cameras: { id: string; name: string; location: string; key: string; enabled: boolean; state: CameraState }[];
 }

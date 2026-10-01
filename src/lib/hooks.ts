@@ -6,6 +6,7 @@ import { api } from "./api";
 import { useConnection } from "./connection";
 import type {
   AppEvent,
+  Bridge,
   Camera,
   DiscoverySnapshot,
   Health,
@@ -40,6 +41,9 @@ export function revalidate(prefix: string) {
 
 export const useCameras = () =>
   useApi<{ cameras: Camera[] }>("/api/cameras", { refreshInterval: 3000 });
+
+export const useBridges = (enabled = true) =>
+  useApi<{ bridges: Bridge[] }>(enabled ? "/api/bridges" : null, { refreshInterval: 4000 });
 
 export const useCamera = (id: string | null) =>
   useApi<Camera>(id ? `/api/cameras/${id}` : null, { refreshInterval: 2000 });

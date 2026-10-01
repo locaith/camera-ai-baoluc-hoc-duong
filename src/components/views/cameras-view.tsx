@@ -22,6 +22,7 @@ import {
   Webcam,
 } from "lucide-react";
 
+import { BridgesPanel } from "@/components/camera/bridge-panel";
 import { useCameraActions } from "@/components/camera/camera-actions";
 import { aiVerdict, CameraStateBadge } from "@/components/camera/camera-bits";
 import { AddCameraDialog, EditCameraDialog, deviceTitle } from "@/components/camera/camera-dialogs";
@@ -111,7 +112,11 @@ function CameraRow({
       <div className="hidden min-w-0 space-y-1.5 lg:block">
         <CameraStateBadge state={camera.state} />
         <div className={verdict.level === 2 && camera.state === "online" ? "text-xs text-critical" : "text-xs text-ink-3"}>
-          {camera.source === "remote" && camera.state === "online" && camera.owner
+          {camera.bridge_id
+            ? camera.state === "online"
+              ? `Qua máy cầu nối ${camera.bridge_name || ""} · AI: ${verdict.label.toLowerCase()}`
+              : `Máy cầu nối ${camera.bridge_name || ""} chưa gửi hình`
+            : camera.source === "remote" && camera.state === "online" && camera.owner
             ? `Đang phát từ ${camera.owner}`
             : camera.state === "waiting"
               ? "Chưa có máy nào phát hình"
@@ -146,7 +151,7 @@ function CameraRow({
       </div>
 
       <div className="flex items-center gap-2">
-        {camera.source === "remote" && isAdmin && (
+        {camera.source === "remote" && !camera.bridge_id && isAdmin && (
           <Button variant={camera.state === "waiting" ? "primary" : "secondary"} size="sm" asChild>
             <Link href={`/cameras/${camera.id}/stream`} aria-label="Phát từ máy này">
               <MonitorUp /> <span className="hidden sm:inline">Phát từ máy này</span>
@@ -166,7 +171,7 @@ function CameraRow({
               <ExternalLink /> Mở chi tiết
             </Link>
           </MenuItem>
-          {isAdmin && camera.source === "remote" && (
+          {isAdmin && camera.source === "remote" && !camera.bridge_id && (
             <MenuItem asChild>
               <Link href={`/cameras/${camera.id}/stream`}>
                 <MonitorUp /> Phát từ máy này
@@ -254,8 +259,8 @@ function NetworkPanel({
         }
       />
       <p className="mt-3 text-[13px] text-ink-3">
-        Camera ở nơi khác (nhà, lớp học khác mạng)? Bấm <b className="font-medium text-ink-2">Phát webcam từ máy này</b> trên
-        máy tính đặt cạnh camera đó.
+        Camera IP ở trường (khác mạng với máy chủ)? Dùng <b className="font-medium text-ink-2">Máy cầu nối</b> ở mục dưới. Webcam ở
+        nơi khác? Bấm <b className="font-medium text-ink-2">Phát webcam từ máy này</b> trên máy tính đặt cạnh camera đó.
       </p>
       {total > 0 && (
         <ul className="mt-5 grid gap-2.5 md:grid-cols-2">
@@ -447,6 +452,7 @@ export function CamerasView() {
       />
 
       {isAdmin && <NetworkPanel onConnect={setDevice} onWebcam={setWebcam} />}
+      {isAdmin && <BridgesPanel />}
       <PhonesPanel phones={phones} />
 
       <Card padded={false} className="overflow-hidden">

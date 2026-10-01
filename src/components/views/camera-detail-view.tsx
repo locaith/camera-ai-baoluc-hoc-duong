@@ -93,7 +93,8 @@ export function CameraDetailView({ id }: { id: string }) {
             <div className="mt-2 flex flex-wrap items-center gap-2.5 text-[15px] text-ink-2">
               <CameraStateBadge state={camera.state} />
               {camera.location || (camera.virtual ? `Quay bởi ${camera.owner}` : "Chưa đặt vị trí")}
-              {camera.source === "remote" && camera.state === "online" && camera.owner && (
+              {camera.bridge_id && <span className="text-ink-3">· qua máy cầu nối {camera.bridge_name}</span>}
+              {camera.source === "remote" && !camera.bridge_id && camera.state === "online" && camera.owner && (
                 <span className="text-ink-3">· đang phát từ {camera.owner}</span>
               )}
             </div>
@@ -118,7 +119,7 @@ export function CameraDetailView({ id }: { id: string }) {
                   <Flag /> Đánh dấu
                 </Button>
               )}
-              {isAdmin && camera.source === "remote" && (
+              {isAdmin && camera.source === "remote" && !camera.bridge_id && (
                 <Button size="sm" variant={camera.state === "waiting" ? "primary" : "secondary"} asChild>
                   <Link href={`/cameras/${camera.id}/stream`}>
                     <MonitorUp /> Phát từ máy này
